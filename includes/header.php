@@ -66,7 +66,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .sidebar ul li .submenu{list-style:none;padding:0;max-height:0;overflow:hidden;transition:max-height .3s ease-out;background-color:#34495e}
         .sidebar ul li .submenu li a{padding:10px 20px 10px 45px;font-size:.95em;background-color:transparent}
         .sidebar ul li .submenu li a:hover,.sidebar ul li .submenu li a.active{background-color:#3f5872;border-left:5px solid #3498db}
-        .sidebar ul li .submenu.open{max-height:350px}
+        .sidebar ul li .submenu.open{max-height:400px} /* Aumentado para caber mais itens */
 
         .main-content{flex-grow:1;padding:30px;background-color:#f0f2f5;color:#333}
         .main-content h1{color:#2c3e50;margin-bottom:20px}
@@ -152,6 +152,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
                     <li><a href="cadastro_controles.php">Cadastro de Controles</a></li>
                     <li><a href="cadastro_modelos.php">Cadastro de Modelos</a></li>
                     <li><a href="cadastro_crbm_obm.php">Cadastro de CRBM/OBM</a></li>
+                    <li><a href="gerenciar_documentos.php">Gerenciar Documentos</a></li>
                     <li><a href="alertas.php" class="<?php if ($existem_alertas) echo 'menu-alert'; ?>">Alertas</a></li>
                 </ul>
             </li>
