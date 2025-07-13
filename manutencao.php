@@ -4,25 +4,41 @@ require_once 'includes/header.php';
 
 // 2. LÓGICA PARA BUSCAR O HISTÓRICO DE MANUTENÇÕES
 $historico_manutencoes = [];
+$manutencoes_por_crbm = []; // Novo array para a visão do admin
 
-// A consulta agora usa LEFT JOIN em 3 tabelas para buscar todos os dados necessários
+// A consulta agora busca o CRBM de ambos os tipos de equipamento
 $sql_base = "SELECT 
                 m.*, 
                 a.prefixo AS aeronave_prefixo, 
                 a.modelo AS aeronave_modelo,
+                a.crbm AS aeronave_crbm,
                 c.numero_serie AS controle_sn,
                 c.modelo AS controle_modelo,
-                a_vinc.prefixo AS controle_vinculado_a -- NOVO: Busca o prefixo da aeronave à qual o controle está vinculado
+                c.crbm AS controle_crbm,
+                a_vinc.prefixo AS controle_vinculado_a
              FROM manutencoes m 
              LEFT JOIN aeronaves a ON m.equipamento_id = a.id AND m.equipamento_tipo = 'Aeronave'
              LEFT JOIN controles c ON m.equipamento_id = c.id AND m.equipamento_tipo = 'Controle'
-             LEFT JOIN aeronaves a_vinc ON c.aeronave_id = a_vinc.id"; // NOVO: Join para encontrar o vínculo do controle
+             LEFT JOIN aeronaves a_vinc ON c.aeronave_id = a_vinc.id";
 
 if ($isAdmin) {
-    // Admin vê tudo
-    $sql_historico = $sql_base . " ORDER BY m.data_manutencao DESC";
+    // Admin vê tudo, ordenado por CRBM e depois por data
+    $sql_historico = $sql_base . " ORDER BY aeronave_crbm, controle_crbm, m.data_manutencao DESC";
     $result_historico = $conn->query($sql_historico);
-} else { // Piloto
+    
+    // Organiza os resultados em um array agrupado por CRBM
+    if ($result_historico && $result_historico->num_rows > 0) {
+        while ($row = $result_historico->fetch_assoc()) {
+            // Determina a qual CRBM o registro pertence
+            $crbm_do_registro = $row['aeronave_crbm'] ?? $row['controle_crbm'];
+            if (empty($crbm_do_registro)) {
+                $crbm_do_registro = 'Sem Lotação';
+            }
+            $manutencoes_por_crbm[$crbm_do_registro][] = $row;
+        }
+    }
+
+} else { // Visão do Piloto (permanece a mesma)
     // 1. Busca a OBM do piloto logado
     $obm_do_piloto = '';
     $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
@@ -42,12 +58,11 @@ if ($isAdmin) {
         $stmt_historico->bind_param("ss", $obm_do_piloto, $obm_do_piloto);
         $stmt_historico->execute();
         $result_historico = $stmt_historico->get_result();
-    }
-}
-
-if (isset($result_historico) && $result_historico->num_rows > 0) {
-    while ($row = $result_historico->fetch_assoc()) {
-        $historico_manutencoes[] = $row;
+        if ($result_historico) {
+            while ($row = $result_historico->fetch_assoc()) {
+                $historico_manutencoes[] = $row;
+            }
+        }
     }
 }
 ?>
@@ -60,58 +75,111 @@ if (isset($result_historico) && $result_historico->num_rows > 0) {
         </a>
     </div>
 
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Equipamento</th>
-                    <th>Tipo</th>
-                    <th>Data</th>
-                    <th>Responsável</th>
-                    <th>Nota Fiscal / OS</th>
-                    <th>Garantia até</th>
-                    <th>Descrição</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($historico_manutencoes)): ?>
-                    <?php foreach ($historico_manutencoes as $manutencao): ?>
-                        <tr>
-                            <td>
-                                <?php 
-                                    if ($manutencao['equipamento_tipo'] == 'Aeronave') {
-                                        echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
-                                    } else {
-                                        // ALTERADO AQUI: Adiciona a informação de vínculo
-                                        $vinculo = !empty($manutencao['controle_vinculado_a']) 
-                                            ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' 
-                                            : ' (Reserva)';
-                                        echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
-                                    }
-                                ?>
-                            </td>
-                            <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
-                            <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
-                            <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
-                            <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
-                            <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
-                            <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
-                                <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
-                            </td>
-                            <td class="action-buttons">
-                                <a href="ver_manutencao.php?id=<?php echo $manutencao['id']; ?>" class="edit-btn">Ver Detalhes</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
+    <?php if ($isAdmin): ?>
+        <?php if (!empty($manutencoes_por_crbm)): ?>
+            <?php foreach ($manutencoes_por_crbm as $crbm => $manutencoes): ?>
+                <div class="table-container" style="margin-top: 30px;">
+                    <h2><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm)); ?></h2>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Equipamento</th>
+                                <th>Tipo</th>
+                                <th>Data</th>
+                                <th>Responsável</th>
+                                <th>Nota Fiscal / OS</th>
+                                <th>Garantia até</th>
+                                <th>Descrição</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($manutencoes as $manutencao): ?>
+                                <tr>
+                                    <td>
+                                        <?php 
+                                            if ($manutencao['equipamento_tipo'] == 'Aeronave') {
+                                                echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
+                                            } else {
+                                                $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
+                                                echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
+                                            }
+                                        ?>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
+                                    <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
+                                    <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
+                                    <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
+                                    <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
+                                    <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
+                                        <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
+                                    </td>
+                                    <td class="action-buttons">
+                                        <a href="ver_manutencao.php?id=<?php echo $manutencao['id']; ?>" class="edit-btn">Ver Detalhes</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="table-container">
+                <p style="text-align: center;">Nenhum registro de manutenção encontrado.</p>
+            </div>
+        <?php endif; ?>
+
+    <?php else: ?>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <td colspan="8">Nenhum registro de manutenção encontrado.</td>
+                        <th>Equipamento</th>
+                        <th>Tipo</th>
+                        <th>Data</th>
+                        <th>Responsável</th>
+                        <th>Nota Fiscal / OS</th>
+                        <th>Garantia até</th>
+                        <th>Descrição</th>
+                        <th>Ações</th>
                     </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    <?php if (!empty($historico_manutencoes)): ?>
+                        <?php foreach ($historico_manutencoes as $manutencao): ?>
+                            <tr>
+                                <td>
+                                    <?php 
+                                        if ($manutencao['equipamento_tipo'] == 'Aeronave') {
+                                            echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
+                                        } else {
+                                            $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
+                                            echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
+                                        }
+                                    ?>
+                                </td>
+                                <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
+                                <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
+                                <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
+                                <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
+                                <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
+                                <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
+                                    <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
+                                </td>
+                                <td class="action-buttons">
+                                    <a href="ver_manutencao.php?id=<?php echo $manutencao['id']; ?>" class="edit-btn">Ver Detalhes</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8">Nenhum registro de manutenção encontrado para sua OBM.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
 </div>
 
 <?php

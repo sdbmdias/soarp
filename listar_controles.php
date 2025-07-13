@@ -5,14 +5,11 @@ require_once 'includes/header.php';
 // 2. LÓGICA ESPECÍFICA DA PÁGINA
 $controles = [];
 
-// Query base com LEFT JOIN para buscar o prefixo da aeronave e a nova coluna de homologação
 $sql_base = "SELECT c.id, c.fabricante, c.modelo, c.numero_serie, c.crbm, c.obm, c.status, c.homologacao_anatel, a.prefixo AS prefixo_aeronave 
              FROM controles c 
              LEFT JOIN aeronaves a ON c.aeronave_id = a.id";
 
-// A consulta muda se o usuário for um piloto
 if ($isPiloto) {
-    // 1. Busca o CRBM do piloto logado
     $crbm_do_usuario_logado = '';
     $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
     $stmt_crbm->bind_param("i", $_SESSION['user_id']);
@@ -23,7 +20,6 @@ if ($isPiloto) {
     }
     $stmt_crbm->close();
 
-    // 2. Busca apenas os controles do mesmo CRBM
     if (!empty($crbm_do_usuario_logado)) {
         $sql_controles = $sql_base . " WHERE c.crbm = ? ORDER BY c.id DESC";
         $stmt_controles = $conn->prepare($sql_controles);
@@ -32,12 +28,11 @@ if ($isPiloto) {
         $result_controles = $stmt_controles->get_result();
         $stmt_controles->close();
     }
-} else { // Administradores veem todos os controles
+} else {
     $sql_controles = $sql_base . " ORDER BY c.id DESC";
     $result_controles = $conn->query($sql_controles);
 }
 
-// Popula o array de controles com o resultado da consulta
 if (isset($result_controles) && $result_controles->num_rows > 0) {
     while ($row = $result_controles->fetch_assoc()) {
         $controles[] = $row;
@@ -47,7 +42,6 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
 
 <div class="main-content">
     <h1>Lista de Controles (Rádios)</h1>
-
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -58,7 +52,8 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                     <th>Vinculado ao</th>
                     <th>Lotação (CRBM/OBM)</th>
                     <th>Status</th>
-                    <th>ANATEL</th> <?php if ($isAdmin): ?>
+                    <th>ANATEL</th>
+                    <?php if ($isAdmin): ?>
                     <th>Ações</th>
                     <?php endif; ?>
                 </tr>
@@ -71,22 +66,22 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                             <td><?php echo htmlspecialchars(($controle['fabricante'] ?? 'N/A') . ' / ' . ($controle['modelo'] ?? 'N/A')); ?></td>
                             <td><?php echo htmlspecialchars($controle['numero_serie'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($controle['prefixo_aeronave'] ?? 'Nenhum'); ?></td>
-                            <td><?php echo htmlspecialchars(($controle['crbm'] ?? 'N/A') . ' / ' . ($controle['obm'] ?? 'N/A')); ?></td>
+                            <td>
+                                <?php 
+                                    $crbm_formatado = preg_replace('/(\d)(CRBM)/', '$1º $2', $controle['crbm'] ?? 'N/A');
+                                    echo htmlspecialchars($crbm_formatado . ' / ' . ($controle['obm'] ?? 'N/A'));
+                                ?>
+                            </td>
                             <td>
                                 <?php
-                                $status_map = [
-                                    'ativo' => 'Ativo',
-                                    'em_manutencao' => 'Em Manutenção',
-                                    'baixado' => 'Baixado'
-                                ];
+                                $status_map = ['ativo' => 'Ativo', 'em_manutencao' => 'Em Manutenção', 'baixado' => 'Baixado'];
                                 $status = $controle['status'] ?? 'desconhecido';
                                 $status_texto = $status_map[$status] ?? ucfirst($status);
                                 ?>
-                                <span class="status-<?php echo htmlspecialchars($status); ?>">
-                                    <?php echo htmlspecialchars($status_texto); ?>
-                                </span>
+                                <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
                             </td>
-                            <td><?php echo htmlspecialchars($controle['homologacao_anatel'] ?? 'Não'); ?></td> <?php if ($isAdmin): ?>
+                            <td><?php echo htmlspecialchars($controle['homologacao_anatel'] ?? 'Não'); ?></td>
+                            <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_controles.php?id=<?php echo $controle['id']; ?>" class="edit-btn">Editar</a>
                             </td>
@@ -106,4 +101,4 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
 <?php
 // 4. INCLUI O RODAPÉ
 require_once 'includes/footer.php';
-?>  
+?>

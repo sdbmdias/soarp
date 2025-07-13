@@ -5,9 +5,7 @@ require_once 'includes/header.php';
 // 2. LÓGICA ESPECÍFICA DA PÁGINA
 $aeronaves = [];
 
-// A consulta SQL muda dependendo do perfil do usuário
 if ($isPiloto) {
-    // 1. Busca o CRBM do piloto logado
     $crbm_do_usuario_logado = '';
     $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
     $stmt_crbm->bind_param("i", $_SESSION['user_id']);
@@ -18,7 +16,6 @@ if ($isPiloto) {
     }
     $stmt_crbm->close();
 
-    // 2. Prepara a consulta para buscar apenas as aeronaves do mesmo CRBM
     if (!empty($crbm_do_usuario_logado)) {
         $stmt_aeronaves = $conn->prepare("SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves WHERE crbm = ? ORDER BY prefixo ASC");
         $stmt_aeronaves->bind_param("s", $crbm_do_usuario_logado);
@@ -26,12 +23,11 @@ if ($isPiloto) {
         $result_aeronaves = $stmt_aeronaves->get_result();
         $stmt_aeronaves->close();
     }
-} else { // Se for Administrador, busca todas as aeronaves
+} else {
     $sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves ORDER BY prefixo ASC";
     $result_aeronaves = $conn->query($sql_aeronaves);
 }
 
-// Popula o array de aeronaves com o resultado da consulta
 if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
     while ($row = $result_aeronaves->fetch_assoc()) {
         $aeronaves[] = $row;
@@ -41,7 +37,6 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
 
 <div class="main-content">
     <h1>Lista de Aeronaves</h1>
-
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -54,7 +49,8 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                     <th>Tipo</th>
                     <th>PMD (kg)</th>
                     <th>Status</th>
-                    <th>ANATEL</th> <?php if ($isAdmin): ?>
+                    <th>ANATEL</th>
+                    <?php if ($isAdmin): ?>
                     <th>Ações</th>
                     <?php endif; ?>
                 </tr>
@@ -74,25 +70,24 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                                 echo htmlspecialchars($sisant) . ' (' . $validade_formatada . ')';
                                 ?>
                             </td>
-                            <td><?php echo htmlspecialchars(($aeronave['crbm'] ?? 'N/A') . ' / ' . ($aeronave['obm'] ?? 'N/A')); ?></td>
+                            <td>
+                                <?php 
+                                    $crbm_formatado = preg_replace('/(\d)(CRBM)/', '$1º $2', $aeronave['crbm'] ?? 'N/A');
+                                    echo htmlspecialchars($crbm_formatado . ' / ' . ($aeronave['obm'] ?? 'N/A'));
+                                ?>
+                            </td>
                             <td><?php echo htmlspecialchars(ucfirst(str_replace('_', '-', $aeronave['tipo_drone'] ?? 'N/A'))); ?></td>
                             <td><?php echo htmlspecialchars($aeronave['pmd_kg'] ?? 'N/A'); ?></td>
                             <td>
                                 <?php
-                                $status_map = [
-                                    'ativo' => 'Ativa',
-                                    'em_manutencao' => 'Em Manutenção',
-                                    'baixada' => 'Baixada',
-                                    'adida' => 'Adida'
-                                ];
+                                $status_map = ['ativo' => 'Ativa', 'em_manutencao' => 'Em Manutenção', 'baixada' => 'Baixada', 'adida' => 'Adida'];
                                 $status = $aeronave['status'] ?? 'desconhecido';
                                 $status_texto = $status_map[$status] ?? ucfirst($status);
                                 ?>
-                                <span class="status-<?php echo htmlspecialchars($status); ?>">
-                                    <?php echo htmlspecialchars($status_texto); ?>
-                                </span>
+                                <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
                             </td>
-                            <td><?php echo htmlspecialchars($aeronave['homologacao_anatel'] ?? 'Não'); ?></td> <?php if ($isAdmin): ?>
+                            <td><?php echo htmlspecialchars($aeronave['homologacao_anatel'] ?? 'Não'); ?></td>
+                            <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_aeronaves.php?id=<?php echo $aeronave['id']; ?>" class="edit-btn">Editar</a>
                             </td>
