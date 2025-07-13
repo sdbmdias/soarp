@@ -74,7 +74,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,.1);
-            max-width: 90%; /* Ajuste para ocupar 90% da largura da tela */
+            max-width: 90%;
             margin: auto;
             overflow-x: auto;
         }
@@ -92,7 +92,16 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .form-actions button[type="submit"]:hover{background-color:#218838}
         .form-actions button:disabled{background-color:#a5d6a7;cursor:not-allowed}
         .data-table{width:100%;border-collapse:collapse;margin-top:15px}
-        .data-table th,.data-table td{padding:12px 10px;border-bottom:1px solid #eee;text-align:left;color:#555;font-size:.9em}
+        
+        .data-table th, .data-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+            color: #555;
+            font-size: .9em;
+            vertical-align: middle;
+        }
+
         .data-table th{background-color:#f8f8f8;font-weight:700;color:#2c3e50}
         .data-table tbody tr:hover{background-color:#f5f5f5}
         .action-buttons a{display:inline-block;padding:5px 10px;margin-right:5px;border-radius:4px;text-decoration:none;color:#fff;font-size:.85em}
@@ -125,10 +134,8 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             <li><a href="listar_aeronaves.php"><i class="fas fa-plane"></i> Aeronaves</a></li>
             <li><a href="listar_controles.php"><i class="fas fa-gamepad"></i> Controles</a></li>
             <li><a href="manutencao.php"><i class="fas fa-tools"></i> Manutenção</a></li>
-            <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões Realizadas</a></li>
-            <li><a href="#"><i class="fas fa-file-pdf"></i> Relatório em PDF</a></li>
-            
-            <?php if ($isAdmin): ?>
+            <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
+            <li><a href="#"><i class="fas fa-file-pdf"></i> Relatórios</a></li> <?php if ($isAdmin): ?>
             <li class="has-submenu" id="admin-menu">
                 <a href="#" id="admin-menu-toggle"><i class="fas fa-user-shield"></i> Admin <i class="fas fa-chevron-down submenu-arrow"></i></a>
                 <ul class="submenu" id="admin-submenu">

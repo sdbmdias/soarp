@@ -1,56 +1,120 @@
 <?php
 // 1. INCLUI O CABEÇALHO PADRÃO
-// Essa linha cuida da sessão, segurança, conexão com o banco e menu.
 require_once 'includes/header.php';
+
+// 2. LÓGICA PARA BUSCAR O HISTÓRICO DE MANUTENÇÕES
+$historico_manutencoes = [];
+
+// A consulta agora usa LEFT JOIN em 3 tabelas para buscar todos os dados necessários
+$sql_base = "SELECT 
+                m.*, 
+                a.prefixo AS aeronave_prefixo, 
+                a.modelo AS aeronave_modelo,
+                c.numero_serie AS controle_sn,
+                c.modelo AS controle_modelo,
+                a_vinc.prefixo AS controle_vinculado_a -- NOVO: Busca o prefixo da aeronave à qual o controle está vinculado
+             FROM manutencoes m 
+             LEFT JOIN aeronaves a ON m.equipamento_id = a.id AND m.equipamento_tipo = 'Aeronave'
+             LEFT JOIN controles c ON m.equipamento_id = c.id AND m.equipamento_tipo = 'Controle'
+             LEFT JOIN aeronaves a_vinc ON c.aeronave_id = a_vinc.id"; // NOVO: Join para encontrar o vínculo do controle
+
+if ($isAdmin) {
+    // Admin vê tudo
+    $sql_historico = $sql_base . " ORDER BY m.data_manutencao DESC";
+    $result_historico = $conn->query($sql_historico);
+} else { // Piloto
+    // 1. Busca a OBM do piloto logado
+    $obm_do_piloto = '';
+    $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
+    $stmt_obm->bind_param("i", $_SESSION['user_id']);
+    $stmt_obm->execute();
+    $result_obm = $stmt_obm->get_result();
+    if ($result_obm->num_rows > 0) {
+        $obm_do_piloto = $result_obm->fetch_assoc()['obm_piloto'];
+    }
+    $stmt_obm->close();
+
+    // 2. Busca o histórico de manutenções de equipamentos da OBM do piloto
+    if (!empty($obm_do_piloto)) {
+        // A cláusula WHERE agora verifica a OBM em ambas as tabelas de equipamento
+        $sql_historico = $sql_base . " WHERE (a.obm = ? OR c.obm = ?) ORDER BY m.data_manutencao DESC";
+        $stmt_historico = $conn->prepare($sql_historico);
+        $stmt_historico->bind_param("ss", $obm_do_piloto, $obm_do_piloto);
+        $stmt_historico->execute();
+        $result_historico = $stmt_historico->get_result();
+    }
+}
+
+if (isset($result_historico) && $result_historico->num_rows > 0) {
+    while ($row = $result_historico->fetch_assoc()) {
+        $historico_manutencoes[] = $row;
+    }
+}
 ?>
 
 <div class="main-content">
-    <h1>Manutenção de Aeronaves</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Histórico de Manutenções</h1>
+        <a href="cadastro_manutencao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px;">
+            <i class="fas fa-plus"></i> Registrar Nova Manutenção
+        </a>
+    </div>
 
-    <div class="maintenance-container">
-        <h2>Próximas Manutenções Agendadas</h2>
-        <ul class="maintenance-list">
-            <li>
-                <div>
-                    <strong>Drone:</strong> HAWK 05 (DJI Mavic 3 Thermal) <br>
-                    <strong>Tipo de Manutenção:</strong> Revisão Anual Obrigatória <br>
-                    <strong>Data Prevista:</strong> 25/08/2025
-                </div>
-                <div class="maintenance-actions">
-                    <button>Ver Detalhes</button>
-                </div>
-            </li>
-            <li>
-                <div>
-                    <strong>Drone:</strong> HAWK 12 (Autel EVO Max 4T) <br>
-                    <strong>Tipo de Manutenção:</strong> Troca de Baterias Principais <br>
-                    <strong>Data Prevista:</strong> 10/09/2025
-                </div>
-                <div class="maintenance-actions">
-                    <button>Ver Detalhes</button>
-                </div>
-            </li>
-            <li>
-                <div>
-                    <strong>Drone:</strong> HAWK 01 (DJI Air 3) <br>
-                    <strong>Tipo de Manutenção:</strong> Calibração de Sensores <br>
-                    <strong>Data Prevista:</strong> 01/10/2025
-                </div>
-                <div class="maintenance-actions">
-                    <button>Ver Detalhes</button>
-                </div>
-            </li>
-        </ul>
-
-        <h2 style="margin-top: 40px;">Histórico de Manutenções</h2>
-        <p>Esta seção exibirá um histórico detalhado de todas as manutenções realizadas em cada aeronave.</p>
-        
-        <h2 style="margin-top: 40px;">Registrar Nova Manutenção</h2>
-        <p>Formulário para registrar uma nova manutenção realizada ou agendada.</p>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Equipamento</th>
+                    <th>Tipo</th>
+                    <th>Data</th>
+                    <th>Responsável</th>
+                    <th>Nota Fiscal / OS</th>
+                    <th>Garantia até</th>
+                    <th>Descrição</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($historico_manutencoes)): ?>
+                    <?php foreach ($historico_manutencoes as $manutencao): ?>
+                        <tr>
+                            <td>
+                                <?php 
+                                    if ($manutencao['equipamento_tipo'] == 'Aeronave') {
+                                        echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
+                                    } else {
+                                        // ALTERADO AQUI: Adiciona a informação de vínculo
+                                        $vinculo = !empty($manutencao['controle_vinculado_a']) 
+                                            ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' 
+                                            : ' (Reserva)';
+                                        echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
+                                    }
+                                ?>
+                            </td>
+                            <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
+                            <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
+                            <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
+                            <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
+                            <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
+                            <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
+                                <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
+                            </td>
+                            <td class="action-buttons">
+                                <a href="ver_manutencao.php?id=<?php echo $manutencao['id']; ?>" class="edit-btn">Ver Detalhes</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="8">Nenhum registro de manutenção encontrado.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 
 <?php
-// 3. INCLUI O RODAPÉ PADRÃO
+// 4. INCLUI O RODAPÉ
 require_once 'includes/footer.php';
 ?>

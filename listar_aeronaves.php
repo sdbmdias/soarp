@@ -20,14 +20,14 @@ if ($isPiloto) {
 
     // 2. Prepara a consulta para buscar apenas as aeronaves do mesmo CRBM
     if (!empty($crbm_do_usuario_logado)) {
-        $stmt_aeronaves = $conn->prepare("SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status FROM aeronaves WHERE crbm = ? ORDER BY prefixo ASC");
+        $stmt_aeronaves = $conn->prepare("SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves WHERE crbm = ? ORDER BY prefixo ASC");
         $stmt_aeronaves->bind_param("s", $crbm_do_usuario_logado);
         $stmt_aeronaves->execute();
         $result_aeronaves = $stmt_aeronaves->get_result();
         $stmt_aeronaves->close();
     }
 } else { // Se for Administrador, busca todas as aeronaves
-    $sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status FROM aeronaves ORDER BY prefixo ASC";
+    $sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves ORDER BY prefixo ASC";
     $result_aeronaves = $conn->query($sql_aeronaves);
 }
 
@@ -54,7 +54,7 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                     <th>Tipo</th>
                     <th>PMD (kg)</th>
                     <th>Status</th>
-                    <?php if ($isAdmin): ?>
+                    <th>ANATEL</th> <?php if ($isAdmin): ?>
                     <th>Ações</th>
                     <?php endif; ?>
                 </tr>
@@ -80,7 +80,7 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                             <td>
                                 <?php
                                 $status_map = [
-                                    'ativo' => 'Ativa', // ALTERADO AQUI
+                                    'ativo' => 'Ativa',
                                     'em_manutencao' => 'Em Manutenção',
                                     'baixada' => 'Baixada',
                                     'adida' => 'Adida'
@@ -92,7 +92,7 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                                     <?php echo htmlspecialchars($status_texto); ?>
                                 </span>
                             </td>
-                            <?php if ($isAdmin): ?>
+                            <td><?php echo htmlspecialchars($aeronave['homologacao_anatel'] ?? 'Não'); ?></td> <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_aeronaves.php?id=<?php echo $aeronave['id']; ?>" class="edit-btn">Editar</a>
                             </td>
@@ -101,7 +101,7 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="<?php echo $isAdmin ? '9' : '8'; ?>">Nenhuma aeronave encontrada.</td>
+                        <td colspan="<?php echo $isAdmin ? '10' : '9'; ?>">Nenhuma aeronave encontrada.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

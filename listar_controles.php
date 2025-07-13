@@ -5,8 +5,8 @@ require_once 'includes/header.php';
 // 2. LÓGICA ESPECÍFICA DA PÁGINA
 $controles = [];
 
-// Query base com LEFT JOIN para buscar o prefixo da aeronave, se houver
-$sql_base = "SELECT c.id, c.fabricante, c.modelo, c.numero_serie, c.crbm, c.obm, c.status, a.prefixo AS prefixo_aeronave 
+// Query base com LEFT JOIN para buscar o prefixo da aeronave e a nova coluna de homologação
+$sql_base = "SELECT c.id, c.fabricante, c.modelo, c.numero_serie, c.crbm, c.obm, c.status, c.homologacao_anatel, a.prefixo AS prefixo_aeronave 
              FROM controles c 
              LEFT JOIN aeronaves a ON c.aeronave_id = a.id";
 
@@ -55,9 +55,10 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                     <th>ID</th>
                     <th>Fabricante/Modelo</th>
                     <th>Nº Série</th>
-                    <th>Vinculado ao</th> <th>Lotação (CRBM/OBM)</th>
+                    <th>Vinculado ao</th>
+                    <th>Lotação (CRBM/OBM)</th>
                     <th>Status</th>
-                    <?php if ($isAdmin): ?>
+                    <th>ANATEL</th> <?php if ($isAdmin): ?>
                     <th>Ações</th>
                     <?php endif; ?>
                 </tr>
@@ -85,7 +86,7 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                                     <?php echo htmlspecialchars($status_texto); ?>
                                 </span>
                             </td>
-                            <?php if ($isAdmin): ?>
+                            <td><?php echo htmlspecialchars($controle['homologacao_anatel'] ?? 'Não'); ?></td> <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_controles.php?id=<?php echo $controle['id']; ?>" class="edit-btn">Editar</a>
                             </td>
@@ -94,7 +95,7 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="<?php echo $isAdmin ? '7' : '6'; ?>">Nenhum controle cadastrado.</td>
+                        <td colspan="<?php echo $isAdmin ? '8' : '7'; ?>">Nenhum controle cadastrado.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -105,4 +106,4 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
 <?php
 // 4. INCLUI O RODAPÉ
 require_once 'includes/footer.php';
-?>
+?>  
