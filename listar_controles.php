@@ -55,8 +55,7 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                     <th>ID</th>
                     <th>Fabricante/Modelo</th>
                     <th>Nº Série</th>
-                    <th>Vinculado a</th>
-                    <th>Lotação (CRBM/OBM)</th>
+                    <th>Vinculado ao</th> <th>Lotação (CRBM/OBM)</th>
                     <th>Status</th>
                     <?php if ($isAdmin): ?>
                     <th>Ações</th>
@@ -73,11 +72,18 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                             <td><?php echo htmlspecialchars($controle['prefixo_aeronave'] ?? 'Nenhum'); ?></td>
                             <td><?php echo htmlspecialchars(($controle['crbm'] ?? 'N/A') . ' / ' . ($controle['obm'] ?? 'N/A')); ?></td>
                             <td>
-                                <?php 
+                                <?php
+                                $status_map = [
+                                    'ativo' => 'Ativo',
+                                    'em_manutencao' => 'Em Manutenção',
+                                    'baixado' => 'Baixado'
+                                ];
                                 $status = $controle['status'] ?? 'desconhecido';
-                                $status_texto = ucfirst(str_replace('_', ' ', $status));
+                                $status_texto = $status_map[$status] ?? ucfirst($status);
                                 ?>
-                                <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
+                                <span class="status-<?php echo htmlspecialchars($status); ?>">
+                                    <?php echo htmlspecialchars($status_texto); ?>
+                                </span>
                             </td>
                             <?php if ($isAdmin): ?>
                             <td class="action-buttons">

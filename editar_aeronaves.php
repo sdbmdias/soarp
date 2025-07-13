@@ -12,27 +12,24 @@ if (!$isAdmin) {
 $mensagem_status = "";
 $aeronave_data = null;
 
-// Pega o ID da aeronave do GET (primeiro load) ou do POST (após submit)
 $aeronave_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['aeronave_id']) ? intval($_POST['aeronave_id']) : null);
 
-// --- Lógica para buscar prefixos já utilizados, excluindo o da aeronave atual ---
 $usados_prefixos = [];
-$sql_used_prefixes = "SELECT prefixo FROM aeronaves WHERE id != ?";
-$stmt_prefixes = $conn->prepare($sql_used_prefixes);
-if ($stmt_prefixes) {
-    $stmt_prefixes->bind_param("i", $aeronave_id);
-    $stmt_prefixes->execute();
-    $result_used_prefixes = $stmt_prefixes->get_result();
-    while ($row_prefix = $result_used_prefixes->fetch_assoc()) {
-        $usados_prefixos[] = $row_prefix['prefixo'];
+if ($aeronave_id) {
+    $sql_used_prefixes = "SELECT prefixo FROM aeronaves WHERE id != ?";
+    $stmt_prefixes = $conn->prepare($sql_used_prefixes);
+    if ($stmt_prefixes) {
+        $stmt_prefixes->bind_param("i", $aeronave_id);
+        $stmt_prefixes->execute();
+        $result_used_prefixes = $stmt_prefixes->get_result();
+        while ($row_prefix = $result_used_prefixes->fetch_assoc()) {
+            $usados_prefixos[] = $row_prefix['prefixo'];
+        }
+        $stmt_prefixes->close();
     }
-    $stmt_prefixes->close();
 }
-// --- Fim da busca de prefixos ---
 
-// --- Lógica para CARREGAR (GET) ou ATUALIZAR (POST) os dados ---
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $aeronave_id) {
-    // ATUALIZA OS DADOS
     $fabricante = htmlspecialchars($_POST['fabricante']);
     $modelo = htmlspecialchars($_POST['modelo']);
     $prefixo = htmlspecialchars($_POST['prefixo']);
@@ -45,20 +42,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $aeronave_id) {
     $pmd_kg = floatval($_POST['pmd_kg']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $status = htmlspecialchars($_POST['status']);
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
-    $stmt = $conn->prepare("UPDATE aeronaves SET fabricante=?, modelo=?, prefixo=?, numero_serie=?, cadastro_sisant=?, validade_sisant=?, crbm=?, obm=?, tipo_drone=?, pmd_kg=?, data_aquisicao=?, status=?, info_adicionais=? WHERE id = ?");
-    $stmt->bind_param("sssssssssdsssi", $fabricante, $modelo, $prefixo, $numero_serie, $cadastro_sisant, $validade_sisant, $crbm, $obm, $tipo_drone, $pmd_kg, $data_aquisicao, $status, $info_adicionais, $aeronave_id);
+    $stmt = $conn->prepare("UPDATE aeronaves SET fabricante=?, modelo=?, prefixo=?, numero_serie=?, cadastro_sisant=?, validade_sisant=?, crbm=?, obm=?, tipo_drone=?, pmd_kg=?, data_aquisicao=?, status=?, homologacao_anatel=?, info_adicionais=? WHERE id = ?");
+    $stmt->bind_param("sssssssssdssssi", $fabricante, $modelo, $prefixo, $numero_serie, $cadastro_sisant, $validade_sisant, $crbm, $obm, $tipo_drone, $pmd_kg, $data_aquisicao, $status, $homologacao_anatel, $info_adicionais, $aeronave_id);
 
     if ($stmt->execute()) {
-        $mensagem_status = "<div class='success-message-box'>Aeronave atualizada com sucesso!</div>";
+        $mensagem_status = "<div class='success-message-box'>Aeronave atualizada com sucesso! Redirecionando...</div>";
     } else {
         $mensagem_status = "<div class='error-message-box'>Erro ao atualizar aeronave: " . htmlspecialchars($stmt->error) . "</div>";
     }
     $stmt->close();
 }
 
-// CARREGA OS DADOS DA AERONAVE para exibir no formulário (seja em GET ou após um POST)
 if ($aeronave_id) {
     $stmt_load = $conn->prepare("SELECT * FROM aeronaves WHERE id = ?");
     $stmt_load->bind_param("i", $aeronave_id);
@@ -71,7 +68,6 @@ if ($aeronave_id) {
     }
     $stmt_load->close();
 } else {
-    // Se nenhum ID foi fornecido na URL
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         $mensagem_status = "<div class='error-message-box'>ID da aeronave não fornecido para edição.</div>";
     }
@@ -83,12 +79,12 @@ if ($aeronave_id) {
 
     <?php echo $mensagem_status; ?>
 
-    <?php if ($aeronave_data): // Só exibe o formulário se os dados da aeronave foram carregados ?>
+    <?php if ($aeronave_data): ?>
     <div class="form-container">
         <form id="editAeronaveForm" action="editar_aeronaves.php?id=<?php echo htmlspecialchars($aeronave_id); ?>" method="POST">
             <input type="hidden" name="aeronave_id" value="<?php echo htmlspecialchars($aeronave_data['id']); ?>">
             <div class="form-grid">
-                 <div class="form-group">
+                <div class="form-group">
                     <label for="fabricante">Fabricante:</label>
                     <select id="fabricante" name="fabricante" required>
                         <option value="">Selecione o Fabricante</option>
@@ -159,6 +155,12 @@ if ($aeronave_id) {
                         <option value="adida" <?php echo ($aeronave_data['status'] == 'adida') ? 'selected' : ''; ?>>Adida</option>
                     </select>
                 </div>
+                 <div class="form-group">
+                    <label for="homologacao_anatel">Homologação ANATEL:</label> <select id="homologacao_anatel" name="homologacao_anatel" required>
+                        <option value="Sim" <?php echo (isset($aeronave_data['homologacao_anatel']) && $aeronave_data['homologacao_anatel'] == 'Sim') ? 'selected' : ''; ?>>Sim</option>
+                        <option value="Não" <?php echo (isset($aeronave_data['homologacao_anatel']) && $aeronave_data['homologacao_anatel'] == 'Não') ? 'selected' : ''; ?>>Não</option>
+                    </select>
+                </div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label for="info_adicionais">Informações Adicionais (opcional):</label>
                     <textarea id="info_adicionais" name="info_adicionais" rows="4"><?php echo htmlspecialchars($aeronave_data['info_adicionais'] ?? ''); ?></textarea>
@@ -176,7 +178,6 @@ if ($aeronave_id) {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Só executa o script se o formulário existir na página
     if (document.getElementById('editAeronaveForm')) {
         const modelosPorFabricante = {
             'DJI': [ 'DJI FlyCart 30', 'DJI FlyCart 100', 'DJI Mini 3 Pro', 'DJI Mini 4 Pro', 'Matrice 30 Thermal (M30T)', 'Matrice 300 RTK', 'Matrice 350 RTK', 'Mavic 2 Enterprise', 'Mavic 2 Enterprise Advanced', 'Mavic 3 Classic', 'Mavic 3 Enterprise (M3E)', 'Mavic 3 Multispectral (M3M)', 'Mavic 3 Pro', 'Mavic 3 Thermal (M3T)', 'Phantom 3', 'Phantom 4 Pro V2.0', 'Phantom 4 RTK' ],
@@ -195,7 +196,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const obmSelect = document.getElementById('obm');
         const prefixoSelect = document.getElementById('prefixo');
 
-        // Pega os valores salvos no banco de dados, passados pelo PHP
         const valorSalvo = {
             modelo: "<?php echo addslashes($aeronave_data['modelo'] ?? ''); ?>",
             obm: "<?php echo addslashes($aeronave_data['obm'] ?? ''); ?>",
@@ -213,7 +213,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     modeloSelect.appendChild(option);
                 });
             }
-            // Define o valor salvo após popular as opções
             modeloSelect.value = valorSalvo.modelo;
         }
 
@@ -235,7 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
             prefixoSelect.innerHTML = '';
             const prefixosUsados = <?php echo json_encode($usados_prefixos); ?>;
             
-            // Adiciona o prefixo atual da aeronave como primeira opção
             if (valorSalvo.prefixo) {
                 const optionAtual = document.createElement('option');
                 optionAtual.value = valorSalvo.prefixo;
@@ -243,7 +241,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 prefixoSelect.appendChild(optionAtual);
             }
 
-            // Adiciona os outros prefixos, desabilitando os que estão em uso
             for (let i = 1; i <= 50; i++) {
                 const nomePrefixo = `HAWK ${i.toString().padStart(2, '0')}`;
                 if (nomePrefixo === valorSalvo.prefixo) continue;
@@ -263,10 +260,16 @@ document.addEventListener('DOMContentLoaded', function() {
         fabricanteSelect.addEventListener('change', atualizarModelos);
         crbmSelect.addEventListener('change', atualizarOBMs);
 
-        // Funções para carregar o estado inicial do formulário
         atualizarModelos();
         atualizarOBMs();
         gerarPrefixos();
+    }
+    
+    const successMessage = document.querySelector('.success-message-box');
+    if (successMessage) {
+        setTimeout(function() {
+            window.location.href = 'listar_aeronaves.php';
+        }, 2000);
     }
 });
 </script>

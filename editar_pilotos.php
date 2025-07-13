@@ -12,12 +12,9 @@ if (!$isAdmin) {
 $mensagem_status = "";
 $piloto_data = null;
 
-// Pega o ID do piloto do GET ou do POST
 $piloto_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['piloto_id']) ? intval($_POST['piloto_id']) : null);
 
-// --- Lógica para CARREGAR (GET) ou ATUALIZAR (POST) os dados ---
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
-    // ATUALIZA OS DADOS
     $nome_completo = htmlspecialchars($_POST['nome_completo']);
     $rg = htmlspecialchars($_POST['rg']);
     $cpf = htmlspecialchars($_POST['cpf']);
@@ -35,14 +32,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
     $stmt->bind_param("ssssssssssssi", $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $tipo_usuario, $piloto_id);
 
     if ($stmt->execute()) {
-        $mensagem_status = "<div class='success-message-box'>Piloto atualizado com sucesso!</div>";
+        $mensagem_status = "<div class='success-message-box'>Piloto atualizado com sucesso! Redirecionando...</div>";
     } else {
         $mensagem_status = "<div class='error-message-box'>Erro ao atualizar piloto: " . htmlspecialchars($stmt->error) . "</div>";
     }
     $stmt->close();
 }
 
-// CARREGA OS DADOS DO PILOTO para exibir no formulário
 if ($piloto_id) {
     $stmt_load = $conn->prepare("SELECT id, nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, tipo_usuario FROM pilotos WHERE id = ?");
     $stmt_load->bind_param("i", $piloto_id);
@@ -55,7 +51,6 @@ if ($piloto_id) {
     }
     $stmt_load->close();
 } else {
-    // Se nenhum ID foi fornecido na URL
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         $mensagem_status = "<div class='error-message-box'>ID do piloto não fornecido para edição.</div>";
     }
@@ -110,8 +105,7 @@ if ($piloto_id) {
                     <select id="obm_piloto" name="obm_piloto" required> </select>
                 </div>
                 <div class="form-group">
-                    <label for="cadastro_sarpas">Cadastro SARPAS:</label>
-                    <input type="text" id="cadastro_sarpas" name="cadastro_sarpas" value="<?php echo htmlspecialchars($piloto_data['cadastro_sarpas']); ?>" required>
+                    <label for="cadastro_sarpas">Código SARPAS:</label> <input type="text" id="cadastro_sarpas" name="cadastro_sarpas" value="<?php echo htmlspecialchars($piloto_data['cadastro_sarpas']); ?>" required>
                 </div>
                 <div class="form-group">
                     <label for="cparp">CPARP:</label>
@@ -162,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const crbmSelect = document.getElementById('crbm_piloto');
         const obmSelect = document.getElementById('obm_piloto');
-        // Pega o valor da OBM salvo no banco, passado pelo PHP
         const valorSalvoOBM = "<?php echo addslashes($piloto_data['obm_piloto'] ?? ''); ?>";
 
         function atualizarOBMs() {
@@ -180,14 +173,18 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 obmSelect.disabled = true;
             }
-            // Define o valor salvo após popular as opções
             obmSelect.value = valorSalvoOBM;
         }
 
         crbmSelect.addEventListener('change', atualizarOBMs);
-        
-        // Chama a função uma vez no início para carregar o estado inicial do formulário
         atualizarOBMs();
+    }
+
+    const successMessage = document.querySelector('.success-message-box');
+    if (successMessage) {
+        setTimeout(function() {
+            window.location.href = 'listar_pilotos.php';
+        }, 2000); // 2 segundos
     }
 });
 </script>

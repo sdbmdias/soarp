@@ -84,11 +84,19 @@ if (isset($result_pilotos) && $result_pilotos->num_rows > 0) {
                             <td><?php echo htmlspecialchars(($piloto['crbm_piloto'] ?? 'N/A') . ' / ' . ($piloto['obm_piloto'] ?? 'N/A')); ?></td>
                             <td><?php echo htmlspecialchars(($piloto['cadastro_sarpas'] ?? 'N/A') . ' (' . ($piloto['cparp'] ?? 'N/A') . ')'); ?></td>
                             <td>
-                                <?php 
+                                <?php
+                                $status_map = [
+                                    'ativo' => 'Ativo', // Correto
+                                    'afastado' => 'Afastado',
+                                    'desativado' => 'Desativado'
+                                ];
+                                // Note que a coluna aqui é 'status_piloto'
                                 $status = $piloto['status_piloto'] ?? 'desconhecido';
-                                $status_texto = ucfirst($status);
+                                $status_texto = $status_map[$status] ?? ucfirst($status);
                                 ?>
-                                <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
+                                <span class="status-<?php echo htmlspecialchars($status); ?>">
+                                    <?php echo htmlspecialchars($status_texto); ?>
+                                </span>
                             </td>
 
                             <?php if ($isAdmin): ?>

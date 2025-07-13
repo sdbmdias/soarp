@@ -3,17 +3,14 @@
 require_once 'includes/header.php';
 
 // 2. VERIFICAÇÃO DE PERMISSÃO
-// Apenas administradores podem acessar esta página
 if (!$isAdmin) {
     header("Location: dashboard.php");
     exit();
 }
 
 // 3. LÓGICA ESPECÍFICA DA PÁGINA
+$mensagem_status = "";
 
-$mensagem_status = ""; // Para mensagens de sucesso ou erro
-
-// --- Lógica para buscar prefixos já utilizados ---
 $usados_prefixos = [];
 $sql_used_prefixes = "SELECT prefixo FROM aeronaves";
 $result_used_prefixes = $conn->query($sql_used_prefixes);
@@ -22,12 +19,8 @@ if ($result_used_prefixes) {
         $usados_prefixos[] = $row['prefixo'];
     }
 }
-// --- Fim da busca de prefixos ---
 
-
-// --- Lógica para processar o formulário quando enviado ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Coleta e limpa os dados do formulário
     $fabricante = htmlspecialchars($_POST['fabricante']);
     $modelo = htmlspecialchars($_POST['modelo']);
     $prefixo = htmlspecialchars($_POST['prefixo']);
@@ -40,15 +33,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $pmd_kg = floatval($_POST['pmd_kg']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $status = htmlspecialchars($_POST['status']);
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
-    // Prepara e executa a inserção no banco de dados
-    $stmt = $conn->prepare("INSERT INTO aeronaves (fabricante, modelo, prefixo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, data_aquisicao, status, info_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssssssdsss", $fabricante, $modelo, $prefixo, $numero_serie, $cadastro_sisant, $validade_sisant, $crbm, $obm, $tipo_drone, $pmd_kg, $data_aquisicao, $status, $info_adicionais);
+    $stmt = $conn->prepare("INSERT INTO aeronaves (fabricante, modelo, prefixo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, data_aquisicao, status, homologacao_anatel, info_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssssssssdssss", $fabricante, $modelo, $prefixo, $numero_serie, $cadastro_sisant, $validade_sisant, $crbm, $obm, $tipo_drone, $pmd_kg, $data_aquisicao, $status, $homologacao_anatel, $info_adicionais);
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Aeronave cadastrada com sucesso!</div>";
-        // Adiciona o novo prefixo à lista para desabilitá-lo imediatamente no formulário
         $usados_prefixos[] = $prefixo;
     } else {
         $mensagem_status = "<div class='error-message-box'>Erro ao cadastrar aeronave: " . htmlspecialchars($stmt->error) . "</div>";
@@ -60,7 +52,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div class="main-content">
     <h1>Cadastro de Aeronaves</h1>
 
-    <?php echo $mensagem_status; // Exibe a mensagem de status aqui ?>
+    <?php echo $mensagem_status; ?>
 
     <div class="form-container">
         <form id="aeronaveForm" action="cadastro_aeronaves.php" method="POST">
@@ -79,14 +71,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="">Selecione o Fabricante Primeiro</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="prefixo">Prefixo:</label>
                     <select id="prefixo" name="prefixo" required>
                         <option value="">Selecione o Prefixo</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="numero_serie">Número de Série:</label>
                     <input type="text" id="numero_serie" name="numero_serie" placeholder="Ex: 1587ABC987DEF" required>
@@ -95,12 +85,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="cadastro_sisant">Cadastro SISANT:</label>
                     <input type="text" id="cadastro_sisant" name="cadastro_sisant" placeholder="Ex: PP-2025193001" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="validade_sisant">Validade SISANT:</label>
                     <input type="date" id="validade_sisant" name="validade_sisant" required>
                 </div>
-
                 <div class="form-group">
                     <label for="crbm">CRBM:</label>
                     <select id="crbm" name="crbm" required>
@@ -115,14 +103,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="5CRBM">5º CRBM</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="obm">OBM/Seção:</label>
                     <select id="obm" name="obm" required disabled>
                         <option value="">Selecione o CRBM Primeiro</option>
                     </select>
                 </div>
-                
                 <div class="form-group">
                     <label for="tipo_drone">Tipo de Drone:</label>
                     <select id="tipo_drone" name="tipo_drone" required>
@@ -148,13 +134,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="adida">Adida</option>
                     </select>
                 </div>
-
+                 <div class="form-group">
+                    <label for="homologacao_anatel">Homologação ANATEL:</label> <select id="homologacao_anatel" name="homologacao_anatel" required>
+                        <option value="Sim">Sim</option>
+                        <option value="Não" selected>Não</option>
+                    </select>
+                </div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label for="info_adicionais">Informações Adicionais (opcional):</label>
                     <textarea id="info_adicionais" name="info_adicionais" rows="4" placeholder="Adicione qualquer informação relevante sobre a aeronave."></textarea>
                 </div>
             </div>
-
             <div class="form-actions">
                 <button id="saveButton" type="submit" disabled>Salvar Aeronave</button>
             </div>
@@ -164,12 +154,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Objeto com os modelos por fabricante
     const modelosPorFabricante = {
         'DJI': ["DJI FlyCart 30", "DJI FlyCart 100", "DJI Mini 3 Pro", "DJI Mini 4 Pro", "Matrice 30 Thermal (M30T)", "Matrice 300 RTK", "Matrice 350 RTK", "Mavic 2 Enterprise", "Mavic 2 Enterprise Advanced", "Mavic 3 Classic", "Mavic 3 Enterprise (M3E)", "Mavic 3 Multispectral (M3M)", "Mavic 3 Pro", "Mavic 3 Thermal (M3T)", "Phantom 3", "Phantom 4 Pro V2.0", "Phantom 4 RTK"],
         'Autel Robotics': ["Dragonfish Lite", "Dragonfish Pro", "Dragonfish Standard", "EVO II Dual 640T (V1/V2)", "EVO II Dual 640T V3", "EVO II Enterprise V3", "EVO II Pro (V1/V2)", "EVO II Pro V3", "EVO Lite+", "EVO MAX 4N", "EVO MAX 4T", "EVO Nano+"]
     };
-    // Objeto com as OBMs por CRBM
     const obmPorCrbm = {
         'CCB': ["BM-1", "BM-2", "BM-3", "BM-4", "BM-5", "BM-6", "BM-7", "BM-8"], 'BOA': ["SOARP"], 'GOST': ["GOST"],
         '1CRBM': ["1º BBM", "6º BBM", "7º BBM", "8º BBM"], '2CRBM': ["3º BBM", "11º BBM", "1ª CIBM"],
@@ -177,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function() {
         '5CRBM': ["2º BBM", "12º BBM", "6ª CIBM"]
     };
 
-    // Ordena os modelos alfabeticamente
     for (const fab in modelosPorFabricante) {
         modelosPorFabricante[fab].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     }
@@ -192,19 +179,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const obmSelect = document.getElementById("obm");
     const prefixoSelect = document.getElementById("prefixo");
 
-    // Função para habilitar/desabilitar o botão de salvar
     function checkFormValidity() {
         const allValid = requiredFields.every(field => field.disabled ? true : field.value.trim() !== '');
         saveButton.disabled = !allValid;
     }
 
-    // Adiciona listeners para validar o formulário em tempo real
     requiredFields.forEach(field => {
         field.addEventListener('input', checkFormValidity);
         field.addEventListener('change', checkFormValidity);
     });
     
-    // Atualiza os modelos quando o fabricante muda
     fabricanteSelect.addEventListener("change", function() {
         const fabricante = this.value;
         modeloSelect.innerHTML = '<option value="">Selecione o Modelo</option>';
@@ -222,7 +206,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkFormValidity();
     });
 
-    // Atualiza as OBMs quando o CRBM muda
     crbmSelect.addEventListener("change", function() {
         const crbm = this.value;
         obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
@@ -240,7 +223,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkFormValidity();
     });
 
-    // Gera a lista de prefixos disponíveis
     const prefixosUsados = <?php echo json_encode($usados_prefixos); ?>;
     for (let i = 1; i <= 50; i++) {
         const nomePrefixo = `HAWK ${i.toString().padStart(2, "0")}`;
@@ -254,7 +236,6 @@ document.addEventListener('DOMContentLoaded', function() {
         prefixoSelect.appendChild(option);
     }
     
-    // Garante que o estado inicial do botão esteja correto
     checkFormValidity();
 });
 </script>

@@ -3,7 +3,6 @@
 require_once 'includes/header.php';
 
 // 2. VERIFICAÇÃO DE PERMISSÃO
-// Apenas administradores podem acessar esta página
 if (!$isAdmin) {
     header("Location: dashboard.php");
     exit();
@@ -12,9 +11,7 @@ if (!$isAdmin) {
 // 3. LÓGICA ESPECÍFICA DA PÁGINA
 $mensagem_status = "";
 
-// Processa o formulário quando enviado (método POST)
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Coleta e limpa os dados do formulário
     $nome_completo = htmlspecialchars($_POST['nome_completo']);
     $rg = htmlspecialchars($_POST['rg']);
     $cpf = htmlspecialchars($_POST['cpf']);
@@ -29,11 +26,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $senha = $_POST['senha'];
     $tipo_usuario = htmlspecialchars($_POST['tipo_usuario']);
 
-    // Gera o hash da senha e define que ela precisa ser redefinida no primeiro acesso
     $senha_redefinida = 0; 
     $senha_hashed = password_hash($senha, PASSWORD_DEFAULT);
 
-    // Prepara e executa a inserção no banco
     $stmt = $conn->prepare("INSERT INTO pilotos (nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, senha, tipo_usuario, senha_redefinida) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("sssssssssssssi", $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $senha_hashed, $tipo_usuario, $senha_redefinida);
 
@@ -62,7 +57,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="rg">RG:</label>
                     <input type="text" id="rg" name="rg" placeholder="Ex: X.XXX.XXX-X" required>
                 </div>
-
                 <div class="form-group">
                     <label for="cpf">CPF:</label>
                     <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" title="Formato: 000.000.000-00" required>
@@ -71,12 +65,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="email">E-mail:</label>
                     <input type="email" id="email" name="email" placeholder="email@exemplo.com" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="telefone">Telefone:</label>
                     <input type="tel" id="telefone" name="telefone" placeholder="(XX) X XXXX-XXXX" pattern="\(\d{2}\) \d \d{4}-\d{4}" title="Formato: (XX) X XXXX-XXXX" required>
                 </div>
-
                 <div class="form-group">
                     <label for="crbm_piloto">CRBM:</label>
                     <select id="crbm_piloto" name="crbm_piloto" required>
@@ -91,19 +83,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="5CRBM">5º CRBM</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="obm_piloto">OBM/Seção:</label>
                     <select id="obm_piloto" name="obm_piloto" required disabled>
                         <option value="">Selecione o CRBM Primeiro</option>
                     </select>
                 </div>
-                
                 <div class="form-group">
-                    <label for="cadastro_sarpas">Cadastro SARPAS:</label>
-                    <input type="text" id="cadastro_sarpas" name="cadastro_sarpas" placeholder="Ex: AB2025123456" required>
+                    <label for="cadastro_sarpas">Código SARPAS:</label> <input type="text" id="cadastro_sarpas" name="cadastro_sarpas" placeholder="Ex: AB2025123456" required>
                 </div>
-
                 <div class="form-group">
                     <label for="cparp">CPARP:</label>
                     <select id="cparp" name="cparp" required>
@@ -112,12 +100,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="NAO">NÃO</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="senha">Senha Inicial:</label>
                     <input type="password" id="senha" name="senha" placeholder="Crie uma senha provisória" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="status_piloto">Status:</label>
                     <select id="status_piloto" name="status_piloto" required>
@@ -126,7 +112,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="desativado">Desativado</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="tipo_usuario">Tipo de Usuário:</label>
                     <select id="tipo_usuario" name="tipo_usuario" required>
@@ -135,12 +120,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="piloto">Piloto</option>
                     </select>
                 </div>
-
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label for="info_adicionais_piloto">Informações Adicionais (opcional):</label>
                     <textarea id="info_adicionais_piloto" name="info_adicionais_piloto" rows="4" placeholder="Adicione qualquer informação relevante sobre o piloto..."></textarea>
                 </div>
-
             </div>
             <div class="form-actions">
                 <button type="submit" id="saveButton" disabled>Salvar Piloto</button>
@@ -165,10 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const obmSelect = document.getElementById('obm_piloto');
 
     function checkFormValidity() {
-        const allValid = requiredFields.every(field => {
-            if (field.disabled) return true;
-            return field.value.trim() !== '';
-        });
+        const allValid = requiredFields.every(field => field.disabled ? true : field.value.trim() !== '');
         saveButton.disabled = !allValid;
     }
 
@@ -195,7 +175,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkFormValidity();
     });
     
-    // Verifica o estado inicial do formulário
     checkFormValidity();
 });
 </script>

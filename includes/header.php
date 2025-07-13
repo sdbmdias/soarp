@@ -48,7 +48,6 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
     <title>SOARP - CBMPR</title> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Mantive o CSS aqui por enquanto, mas o próximo passo ideal seria movê-lo para um arquivo styles.css */
         body{font-family:Arial,sans-serif;margin:0;padding:0;display:flex;min-height:100vh;background-color:#f0f2f5;color:#333}
         .sidebar{width:250px;background-color:#2c3e50;color:#fff;padding-top:20px;box-shadow:2px 0 5px rgba(0,0,0,.1);display:flex;flex-direction:column;align-items:center}
         .sidebar ul{list-style:none;padding:0;width:100%}
@@ -58,19 +57,28 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .menu-alert{color:#e74c3c!important;font-weight:700}
         .sidebar ul li.has-submenu>a{position:relative}
         .sidebar ul li.has-submenu>a .submenu-arrow{position:absolute;right:20px;transition:transform .3s ease}
-        .sidebar ul li.has-submenu.open>a .submenu-arrow{transform:rotate(180deg)} /* Correção para girar a seta */
+        .sidebar ul li.has-submenu.open>a .submenu-arrow{transform:rotate(180deg)}
         .sidebar ul li .submenu{list-style:none;padding:0;max-height:0;overflow:hidden;transition:max-height .3s ease-out;background-color:#34495e}
         .sidebar ul li .submenu li a{padding:10px 20px 10px 45px;font-size:.95em;background-color:transparent}
         .sidebar ul li .submenu li a:hover,.sidebar ul li .submenu li a.active{background-color:#3f5872;border-left:5px solid #3498db}
         .sidebar ul li .submenu.open{max-height:250px}
         
-        /* Estilos genéricos de formulário e tabelas que movi para cá */
         .main-content{flex-grow:1;padding:30px;background-color:#f0f2f5;color:#333}
         .main-content h1{color:#2c3e50;margin-bottom:20px}
         .success-message-box,.error-message-box{padding:15px;border-radius:5px;text-align:center;font-weight:700;margin-bottom:20px;width:80%;max-width:700px;margin-left:auto;margin-right:auto;box-shadow:0 2px 5px rgba(0,0,0,.1);opacity:1;transition:opacity .5s ease-out 3s}
         .success-message-box{background-color:#d4edda;color:#155724;border:1px solid #c3e6cb}
         .error-message-box{background-color:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
-        .form-container,.table-container{background-color:#fff;padding:30px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,.1);max-width:900px;margin:auto;overflow-x:auto}
+        
+        .form-container, .table-container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,.1);
+            max-width: 90%; /* Ajuste para ocupar 90% da largura da tela */
+            margin: auto;
+            overflow-x: auto;
+        }
+
         .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
         .form-group{margin-bottom:15px}
         .form-group label{display:block;margin-bottom:8px;font-weight:700;color:#555}
@@ -89,6 +97,24 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .data-table tbody tr:hover{background-color:#f5f5f5}
         .action-buttons a{display:inline-block;padding:5px 10px;margin-right:5px;border-radius:4px;text-decoration:none;color:#fff;font-size:.85em}
         .action-buttons .edit-btn{background-color:#007bff}
+
+        /* --- Estilos Padronizados para Status --- */
+        .status-ativo { 
+            color: #28a745; /* Verde Sucesso */
+            font-weight: 700; 
+        }
+        .status-em_manutencao, .status-afastado { 
+            color: #ffc107; /* Amarelo Alerta */
+            font-weight: 700; 
+        }
+        .status-baixada, .status-desativado { 
+            color: #dc3545; /* Vermelho Perigo */
+            font-weight: 700; 
+        }
+        .status-adida { 
+            color: #007bff; /* Azul Informação */
+            font-weight: 700; 
+        }
     </style>
 </head>
 <body>

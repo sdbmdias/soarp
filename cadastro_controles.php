@@ -9,8 +9,6 @@ if (!$isAdmin) {
 }
 
 // 3. LÓGICA ESPECÍFICA DA PÁGINA
-
-// --- Buscar Aeronaves para o Dropdown ---
 $aeronaves_disponiveis = [];
 $sql_aeronaves = "SELECT id, prefixo, modelo, crbm, obm FROM aeronaves ORDER BY prefixo ASC";
 $result_aeronaves = $conn->query($sql_aeronaves);
@@ -22,24 +20,20 @@ if ($result_aeronaves->num_rows > 0) {
 
 $mensagem_status = "";
 
-// --- Processar o formulário ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Coleta dados fixos
     $fabricante = htmlspecialchars($_POST['fabricante']);
     $modelo = htmlspecialchars($_POST['modelo']);
     $numero_serie = htmlspecialchars($_POST['numero_serie']);
-    // Converte para NULL se o valor for vazio
     $aeronave_id = !empty($_POST['aeronave_id']) ? intval($_POST['aeronave_id']) : NULL;
     $status = htmlspecialchars($_POST['status']);
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
     $crbm = '';
     $obm = '';
 
-    // Lógica para definir a lotação (CRBM/OBM)
     if ($aeronave_id) {
-        // Se um drone foi vinculado, busca a lotação do drone no banco para garantir a integridade.
         $stmt_get_acft_data = $conn->prepare("SELECT crbm, obm FROM aeronaves WHERE id = ?");
         $stmt_get_acft_data->bind_param("i", $aeronave_id);
         $stmt_get_acft_data->execute();
@@ -51,21 +45,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         $stmt_get_acft_data->close();
     } else {
-        // Se for um controle reserva, pega a lotação do formulário.
         $crbm = htmlspecialchars($_POST['crbm']);
         $obm = htmlspecialchars($_POST['obm']);
     }
 
-    // Prepara e executa a query de inserção
-    $stmt = $conn->prepare("INSERT INTO controles (fabricante, modelo, numero_serie, aeronave_id, crbm, obm, status, data_aquisicao, info_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssisssss", $fabricante, $modelo, $numero_serie, $aeronave_id, $crbm, $obm, $status, $data_aquisicao, $info_adicionais);
+    $stmt = $conn->prepare("INSERT INTO controles (fabricante, modelo, numero_serie, aeronave_id, crbm, obm, status, homologacao_anatel, data_aquisicao, info_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssissssss", $fabricante, $modelo, $numero_serie, $aeronave_id, $crbm, $obm, $status, $homologacao_anatel, $data_aquisicao, $info_adicionais);
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Controle cadastrado com sucesso!</div>";
     } else {
-        // Tratamento de erro para número de série duplicado
         if ($conn->errno == 1062) {
-             $mensagem_status = "<div class='error-message-box'>Erro: O número de série informado ('" . htmlspecialchars($numero_serie) . "') já está cadastrado.</div>";
+             $mensagem_status = "<div class='error-message-box'>Erro: O número de série informado já está cadastrado.</div>";
         } else {
             $mensagem_status = "<div class='error-message-box'>Erro ao cadastrar controle: " . htmlspecialchars($stmt->error) . "</div>";
         }
@@ -96,12 +87,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="">Selecione o Fabricante Primeiro</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="numero_serie">Número de Série:</label>
                     <input type="text" id="numero_serie" name="numero_serie" placeholder="Número de série do controle" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="aeronave_id">Vincular à Aeronave (Prefixo):</label>
                     <select id="aeronave_id" name="aeronave_id">
@@ -117,7 +106,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="crbm">CRBM de Lotação:</label>
                     <select id="crbm" name="crbm" required>
@@ -132,14 +120,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="5CRBM">5º CRBM</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="obm">OBM/Seção de Lotação:</label>
                     <select id="obm" name="obm" required disabled>
                         <option value="">Selecione o CRBM Primeiro</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="status">Status:</label>
                     <select id="status" name="status" required>
@@ -148,18 +134,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="baixado">Baixado</option>
                     </select>
                 </div>
-
+                 <div class="form-group">
+                    <label for="homologacao_anatel">Homologação ANATEL:</label> <select id="homologacao_anatel" name="homologacao_anatel" required>
+                        <option value="Sim">Sim</option>
+                        <option value="Não" selected>Não</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label for="data_aquisicao">Data de Aquisição:</label>
                     <input type="date" id="data_aquisicao" name="data_aquisicao" required>
                 </div>
-
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label for="info_adicionais">Informações Adicionais (opcional):</label>
-                    <textarea id="info_adicionais" name="info_adicionais" rows="4" placeholder="Adicione qualquer informação relevante."></textarea>
+                    <textarea id="info_adicionais" name="info_adicionais" rows="4" placeholder="Adicione qualquer informação relevante sobre o controle."></textarea>
                 </div>
             </div>
-
             <div class="form-actions">
                 <button id="saveButton" type="submit" disabled>Salvar Controle</button>
             </div>
@@ -236,29 +225,26 @@ document.addEventListener('DOMContentLoaded', function() {
     aeronaveSelect.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         
-        if (this.value) { // Se uma aeronave for selecionada
+        if (this.value) { 
             const crbm = selectedOption.getAttribute('data-crbm');
             const obm = selectedOption.getAttribute('data-obm');
 
             crbmSelect.value = crbm;
             crbmSelect.dispatchEvent(new Event('change'));
             
-            // Pequeno atraso para garantir que o OBM foi populado antes de selecionar
             setTimeout(() => { obmSelect.value = obm; }, 0);
 
-            // Desabilita os campos de lotação, pois serão definidos pelo drone
             crbmSelect.disabled = true;
             obmSelect.disabled = true; 
-        } else { // Se for "Controle Reserva"
+        } else { 
             crbmSelect.disabled = false;
-            obmSelect.disabled = true; // OBM só habilita após escolher CRBM
+            obmSelect.disabled = true;
             crbmSelect.value = '';
             obmSelect.innerHTML = '<option value="">Selecione o CRBM Primeiro</option>';
         }
         checkFormValidity();
     });
 
-    // Reativa os campos de lotação antes do envio para que seus valores sejam incluídos no POST
     form.addEventListener('submit', function() {
         crbmSelect.disabled = false;
         obmSelect.disabled = false;

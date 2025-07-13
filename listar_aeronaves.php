@@ -78,13 +78,19 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                             <td><?php echo htmlspecialchars(ucfirst(str_replace('_', '-', $aeronave['tipo_drone'] ?? 'N/A'))); ?></td>
                             <td><?php echo htmlspecialchars($aeronave['pmd_kg'] ?? 'N/A'); ?></td>
                             <td>
-                                <?php 
+                                <?php
+                                $status_map = [
+                                    'ativo' => 'Ativa', // ALTERADO AQUI
+                                    'em_manutencao' => 'Em Manutenção',
+                                    'baixada' => 'Baixada',
+                                    'adida' => 'Adida'
+                                ];
                                 $status = $aeronave['status'] ?? 'desconhecido';
-                                $status_classes = ['em_manutencao' => 'em-manutencao', 'baixada' => 'baixada', 'adida' => 'adida', 'ativo' => 'ativo'];
-                                $status_class = $status_classes[$status] ?? 'desconhecido';
-                                $status_texto = ucfirst(str_replace('_', ' ', $status));
+                                $status_texto = $status_map[$status] ?? ucfirst($status);
                                 ?>
-                                <span class="status-<?php echo htmlspecialchars($status_class); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
+                                <span class="status-<?php echo htmlspecialchars($status); ?>">
+                                    <?php echo htmlspecialchars($status_texto); ?>
+                                </span>
                             </td>
                             <?php if ($isAdmin): ?>
                             <td class="action-buttons">
