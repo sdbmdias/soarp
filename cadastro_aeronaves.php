@@ -11,6 +11,7 @@ if (!$isAdmin) {
 // 3. LÓGICA ESPECÍFICA DA PÁGINA
 $mensagem_status = "";
 
+// Busca prefixos já em uso
 $usados_prefixos = [];
 $sql_used_prefixes = "SELECT prefixo FROM aeronaves";
 $result_used_prefixes = $conn->query($sql_used_prefixes);
@@ -19,6 +20,31 @@ if ($result_used_prefixes) {
         $usados_prefixos[] = $row['prefixo'];
     }
 }
+
+// Busca fabricantes e modelos do banco de dados
+$fabricantes_e_modelos = [];
+$sql_modelos = "SELECT fabricante, modelo FROM fabricantes_modelos WHERE tipo = 'Aeronave' ORDER BY CASE WHEN fabricante = 'DJI' THEN 1 WHEN fabricante = 'Autel Robotics' THEN 2 ELSE 3 END, fabricante, modelo";
+$result_modelos = $conn->query($sql_modelos);
+if ($result_modelos) {
+    while ($row = $result_modelos->fetch_assoc()) {
+        $fabricantes_e_modelos[$row['fabricante']][] = $row['modelo'];
+    }
+}
+
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fabricante = htmlspecialchars($_POST['fabricante']);
@@ -33,7 +59,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $pmd_kg = floatval($_POST['pmd_kg']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $status = htmlspecialchars($_POST['status']);
-    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']);
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
     $stmt = $conn->prepare("INSERT INTO aeronaves (fabricante, modelo, prefixo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, data_aquisicao, status, homologacao_anatel, info_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -41,7 +67,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Aeronave cadastrada com sucesso!</div>";
-        $usados_prefixos[] = $prefixo;
+        $usados_prefixos[] = $prefixo; // Atualiza a lista de prefixos em uso na mesma requisição
     } else {
         $mensagem_status = "<div class='error-message-box'>Erro ao cadastrar aeronave: " . htmlspecialchars($stmt->error) . "</div>";
     }
@@ -61,8 +87,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="fabricante">Fabricante:</label>
                     <select id="fabricante" name="fabricante" required>
                         <option value="">Selecione o Fabricante</option>
-                        <option value="DJI">DJI</option>
-                        <option value="Autel Robotics">Autel Robotics</option>
+                        <?php foreach (array_keys($fabricantes_e_modelos) as $fab): ?>
+                            <option value="<?php echo htmlspecialchars($fab); ?>"><?php echo htmlspecialchars($fab); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -93,14 +120,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="crbm">CRBM:</label>
                     <select id="crbm" name="crbm" required>
                         <option value="">Selecione o CRBM</option>
-                        <option value="CCB">CCB</option>
-                        <option value="BOA">BOA</option>
-                        <option value="GOST">GOST</option>
-                        <option value="1CRBM">1º CRBM</option>
-                        <option value="2CRBM">2º CRBM</option>
-                        <option value="3CRBM">3º CRBM</option>
-                        <option value="4CRBM">4º CRBM</option>
-                        <option value="5CRBM">5º CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm_unidade): ?>
+                            <option value="<?php echo htmlspecialchars($crbm_unidade); ?>"><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm_unidade)); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -154,20 +176,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const modelosPorFabricante = {
-        'DJI': ["DJI FlyCart 30", "DJI FlyCart 100", "DJI Mini 3 Pro", "DJI Mini 4 Pro", "Matrice 30 Thermal (M30T)", "Matrice 300 RTK", "Matrice 350 RTK", "Mavic 2 Enterprise", "Mavic 2 Enterprise Advanced", "Mavic 3 Classic", "Mavic 3 Enterprise (M3E)", "Mavic 3 Multispectral (M3M)", "Mavic 3 Pro", "Mavic 3 Thermal (M3T)", "Phantom 3", "Phantom 4 Pro V2.0", "Phantom 4 RTK"],
-        'Autel Robotics': ["Dragonfish Lite", "Dragonfish Pro", "Dragonfish Standard", "EVO II Dual 640T (V1/V2)", "EVO II Dual 640T V3", "EVO II Enterprise V3", "EVO II Pro (V1/V2)", "EVO II Pro V3", "EVO Lite+", "EVO MAX 4N", "EVO MAX 4T", "EVO Nano+"]
-    };
-    const obmPorCrbm = {
-        'CCB': ["BM-1", "BM-2", "BM-3", "BM-4", "BM-5", "BM-6", "BM-7", "BM-8"], 'BOA': ["SOARP"], 'GOST': ["GOST"],
-        '1CRBM': ["1º BBM", "6º BBM", "7º BBM", "8º BBM"], '2CRBM': ["3º BBM", "11º BBM", "1ª CIBM"],
-        '3CRBM': ["4º BBM", "9º BBM", "10º BBM", "13º BBM"], '4CRBM': ["5º BBM", "2ª CIBM", "4ª CIBM", "5ª CIBM"],
-        '5CRBM': ["2º BBM", "12º BBM", "6ª CIBM"]
-    };
-
-    for (const fab in modelosPorFabricante) {
-        modelosPorFabricante[fab].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-    }
+    // Carrega os modelos e unidades do PHP
+    const modelosPorFabricante = <?php echo json_encode($fabricantes_e_modelos); ?>;
+    const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
     const form = document.getElementById('aeronaveForm');
     const saveButton = document.getElementById('saveButton');
@@ -188,11 +199,13 @@ document.addEventListener('DOMContentLoaded', function() {
         field.addEventListener('input', checkFormValidity);
         field.addEventListener('change', checkFormValidity);
     });
-    
+
     fabricanteSelect.addEventListener("change", function() {
         const fabricante = this.value;
         modeloSelect.innerHTML = '<option value="">Selecione o Modelo</option>';
-        if (modelosPorFabricante[fabricante]) {
+        modeloSelect.disabled = true;
+
+        if (fabricante && modelosPorFabricante[fabricante]) {
             modeloSelect.disabled = false;
             modelosPorFabricante[fabricante].forEach(function(modelo) {
                 const option = document.createElement("option");
@@ -200,8 +213,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.textContent = modelo;
                 modeloSelect.appendChild(option);
             });
-        } else {
-            modeloSelect.disabled = true;
         }
         checkFormValidity();
     });
@@ -209,7 +220,9 @@ document.addEventListener('DOMContentLoaded', function() {
     crbmSelect.addEventListener("change", function() {
         const crbm = this.value;
         obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
-        if (obmPorCrbm[crbm]) {
+        obmSelect.disabled = true;
+
+        if (crbm && obmPorCrbm[crbm]) {
             obmSelect.disabled = false;
             obmPorCrbm[crbm].forEach(function(obm) {
                 const option = document.createElement("option");
@@ -217,8 +230,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.textContent = obm;
                 obmSelect.appendChild(option);
             });
-        } else {
-            obmSelect.disabled = true;
         }
         checkFormValidity();
     });
@@ -235,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         prefixoSelect.appendChild(option);
     }
-    
+
     checkFormValidity();
 });
 </script>

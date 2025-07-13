@@ -14,6 +14,7 @@ $controle_data = null;
 
 $controle_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['controle_id']) ? intval($_POST['controle_id']) : null);
 
+// Busca aeronaves disponíveis para vincular
 $aeronaves_disponiveis = [];
 $sql_aeronaves = "SELECT id, prefixo, modelo, crbm, obm FROM aeronaves ORDER BY prefixo ASC";
 $result_aeronaves = $conn->query($sql_aeronaves);
@@ -23,13 +24,39 @@ if ($result_aeronaves->num_rows > 0) {
     }
 }
 
+// Busca fabricantes e modelos de CONTROLES do banco de dados
+$fabricantes_e_modelos_controles = [];
+$sql_modelos_ctrl = "SELECT fabricante, modelo FROM fabricantes_modelos WHERE tipo = 'Controle' ORDER BY CASE WHEN fabricante = 'DJI' THEN 1 WHEN fabricante = 'Autel Robotics' THEN 2 ELSE 3 END, fabricante, modelo";
+$result_modelos_ctrl = $conn->query($sql_modelos_ctrl);
+if ($result_modelos_ctrl) {
+    while ($row = $result_modelos_ctrl->fetch_assoc()) {
+        $fabricantes_e_modelos_controles[$row['fabricante']][] = $row['modelo'];
+    }
+}
+
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
+
+// Lógica de atualização do formulário
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $controle_id) {
     $fabricante = htmlspecialchars($_POST['fabricante']);
     $modelo = htmlspecialchars($_POST['modelo']);
     $numero_serie = htmlspecialchars($_POST['numero_serie']);
     $aeronave_id = !empty($_POST['aeronave_id']) ? intval($_POST['aeronave_id']) : NULL;
     $status = htmlspecialchars($_POST['status']);
-    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
@@ -63,6 +90,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $controle_id) {
     $stmt->close();
 }
 
+// Carrega os dados do controle para preencher o formulário
 if ($controle_id) {
     $stmt_load = $conn->prepare("SELECT * FROM controles WHERE id = ?");
     $stmt_load->bind_param("i", $controle_id);
@@ -94,8 +122,10 @@ if ($controle_id) {
                 <div class="form-group">
                     <label for="fabricante">Fabricante:</label>
                     <select id="fabricante" name="fabricante" required>
-                        <option value="DJI" <?php echo ($controle_data['fabricante'] == 'DJI') ? 'selected' : ''; ?>>DJI</option>
-                        <option value="Autel Robotics" <?php echo ($controle_data['fabricante'] == 'Autel Robotics') ? 'selected' : ''; ?>>Autel Robotics</option>
+                        <option value="">Selecione...</option>
+                        <?php foreach (array_keys($fabricantes_e_modelos_controles) as $fab): ?>
+                            <option value="<?php echo htmlspecialchars($fab); ?>" <?php echo ($controle_data['fabricante'] == $fab) ? 'selected' : ''; ?>><?php echo htmlspecialchars($fab); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -124,14 +154,11 @@ if ($controle_id) {
                     <label for="crbm">CRBM de Lotação:</label>
                     <select id="crbm" name="crbm" required>
                         <option value="">Selecione o CRBM</option>
-                        <option value="CCB" <?php echo ($controle_data['crbm'] == 'CCB') ? 'selected' : ''; ?>>CCB</option>
-                        <option value="BOA" <?php echo ($controle_data['crbm'] == 'BOA') ? 'selected' : ''; ?>>BOA</option>
-                        <option value="GOST" <?php echo ($controle_data['crbm'] == 'GOST') ? 'selected' : ''; ?>>GOST</option>
-                        <option value="1CRBM" <?php echo ($controle_data['crbm'] == '1CRBM') ? 'selected' : ''; ?>>1º CRBM</option>
-                        <option value="2CRBM" <?php echo ($controle_data['crbm'] == '2CRBM') ? 'selected' : ''; ?>>2º CRBM</option>
-                        <option value="3CRBM" <?php echo ($controle_data['crbm'] == '3CRBM') ? 'selected' : ''; ?>>3º CRBM</option>
-                        <option value="4CRBM" <?php echo ($controle_data['crbm'] == '4CRBM') ? 'selected' : ''; ?>>4º CRBM</option>
-                        <option value="5CRBM" <?php echo ($controle_data['crbm'] == '5CRBM') ? 'selected' : ''; ?>>5º CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm_unidade): ?>
+                             <option value="<?php echo htmlspecialchars($crbm_unidade); ?>" <?php echo ($controle_data['crbm'] == $crbm_unidade) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm_unidade)); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -174,16 +201,8 @@ if ($controle_id) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('editControleForm')) {
-        const modelosControlePorFabricante = {
-            'DJI': ['RC', 'RC 2', 'RC Pro', 'RC Plus', 'Smart Controller'],
-            'Autel Robotics': ['Smart Controller V3', 'Smart Controller SE']
-        };
-        const obmPorCrbm = {
-            'CCB': ['BM-1', 'BM-2', 'BM-3', 'BM-4', 'BM-5', 'BM-6', 'BM-7', 'BM-8'], 'BOA': ['SOARP'], 'GOST': ['GOST'],
-            '1CRBM': ['1º BBM', '6º BBM', '7º BBM', '8º BBM'], '2CRBM': ['3º BBM', '11º BBM', '1ª CIBM'],
-            '3CRBM': ['4º BBM', '9º BBM', '10º BBM', '13º BBM'], '4CRBM': ['5º BBM', '2ª CIBM', '4ª CIBM', '5ª CIBM'],
-            '5CRBM': ['2º BBM', '12º BBM', '6ª CIBM']
-        };
+        const modelosControlePorFabricante = <?php echo json_encode($fabricantes_e_modelos_controles); ?>;
+        const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
         const fabricanteSelect = document.getElementById('fabricante');
         const modeloSelect = document.getElementById('modelo');
@@ -193,35 +212,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const valorSalvo = {
             modelo: "<?php echo addslashes($controle_data['modelo'] ?? ''); ?>",
+            crbm: "<?php echo addslashes($controle_data['crbm'] ?? ''); ?>",
             obm: "<?php echo addslashes($controle_data['obm'] ?? ''); ?>"
         };
 
         function atualizarModelos() {
             const fabricante = fabricanteSelect.value;
             modeloSelect.innerHTML = '<option value="">Selecione o Modelo</option>';
+            modeloSelect.disabled = true;
             if (fabricante && modelosControlePorFabricante[fabricante]) {
+                modeloSelect.disabled = false;
                 modelosControlePorFabricante[fabricante].forEach(function(modelo) {
                     const option = document.createElement('option');
                     option.value = modelo;
                     option.textContent = modelo;
+                    if (modelo === valorSalvo.modelo) {
+                        option.selected = true;
+                    }
                     modeloSelect.appendChild(option);
                 });
             }
-            modeloSelect.value = valorSalvo.modelo;
         }
 
         function atualizarOBMs() {
             const crbm = crbmSelect.value;
             obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
+            obmSelect.disabled = true;
             if (crbm && obmPorCrbm[crbm]) {
+                obmSelect.disabled = false;
                 obmPorCrbm[crbm].forEach(function(obm) {
                     const option = document.createElement('option');
                     option.value = obm;
                     option.textContent = obm;
+                    if (obm === valorSalvo.obm) {
+                        option.selected = true;
+                    }
                     obmSelect.appendChild(option);
                 });
             }
-            obmSelect.value = valorSalvo.obm;
         }
 
         function toggleLotacaoFields() {
@@ -234,7 +262,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const obm = selectedOption.getAttribute('data-obm');
                 crbmSelect.value = crbm;
                 crbmSelect.dispatchEvent(new Event('change'));
-                setTimeout(() => { obmSelect.value = obm; }, 50); // Delay
+                setTimeout(() => { obmSelect.value = obm; }, 50);
+            } else {
+                crbmSelect.value = valorSalvo.crbm;
+                crbmSelect.dispatchEvent(new Event('change'));
+                setTimeout(() => { obmSelect.value = valorSalvo.obm; }, 50);
             }
         }
 
@@ -246,13 +278,12 @@ document.addEventListener('DOMContentLoaded', function() {
             crbmSelect.disabled = false;
             obmSelect.disabled = false;
         });
-        
+
         // Carga inicial
         atualizarModelos();
-        atualizarOBMs();
         toggleLotacaoFields();
     }
-    
+
     const successMessage = document.querySelector('.success-message-box');
     if (successMessage) {
         setTimeout(function() {

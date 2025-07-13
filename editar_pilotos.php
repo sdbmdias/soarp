@@ -12,6 +12,20 @@ if (!$isAdmin) {
 $mensagem_status = "";
 $piloto_data = null;
 
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
 $piloto_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['piloto_id']) ? intval($_POST['piloto_id']) : null);
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
@@ -90,14 +104,12 @@ if ($piloto_id) {
                 <div class="form-group">
                     <label for="crbm_piloto">CRBM:</label>
                     <select id="crbm_piloto" name="crbm_piloto" required>
-                        <option value="CCB" <?php echo ($piloto_data['crbm_piloto'] == 'CCB') ? 'selected' : ''; ?>>CCB</option>
-                        <option value="BOA" <?php echo ($piloto_data['crbm_piloto'] == 'BOA') ? 'selected' : ''; ?>>BOA</option>
-                        <option value="GOST" <?php echo ($piloto_data['crbm_piloto'] == 'GOST') ? 'selected' : ''; ?>>GOST</option>
-                        <option value="1CRBM" <?php echo ($piloto_data['crbm_piloto'] == '1CRBM') ? 'selected' : ''; ?>>1º CRBM</option>
-                        <option value="2CRBM" <?php echo ($piloto_data['crbm_piloto'] == '2CRBM') ? 'selected' : ''; ?>>2º CRBM</option>
-                        <option value="3CRBM" <?php echo ($piloto_data['crbm_piloto'] == '3CRBM') ? 'selected' : ''; ?>>3º CRBM</option>
-                        <option value="4CRBM" <?php echo ($piloto_data['crbm_piloto'] == '4CRBM') ? 'selected' : ''; ?>>4º CRBM</option>
-                        <option value="5CRBM" <?php echo ($piloto_data['crbm_piloto'] == '5CRBM') ? 'selected' : ''; ?>>5º CRBM</option>
+                        <option value="">Selecione o CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm): ?>
+                            <option value="<?php echo htmlspecialchars($crbm); ?>" <?php echo ($piloto_data['crbm_piloto'] == $crbm) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm)); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -147,12 +159,7 @@ if ($piloto_id) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('editPilotoForm')) {
-        const obmPorCrbm = {
-            'CCB': ['BM-1', 'BM-2', 'BM-3', 'BM-4', 'BM-5', 'BM-6', 'BM-7', 'BM-8'], 'BOA': ['SOARP'], 'GOST': ['GOST'],
-            '1CRBM': ['1º BBM', '6º BBM', '7º BBM', '8º BBM'], '2CRBM': ['3º BBM', '11º BBM', '1ª CIBM'],
-            '3CRBM': ['4º BBM', '9º BBM', '10º BBM', '13º BBM'], '4CRBM': ['5º BBM', '2ª CIBM', '4ª CIBM', '5ª CIBM'],
-            '5CRBM': ['2º BBM', '12º BBM', '6ª CIBM']
-        };
+        const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
         const crbmSelect = document.getElementById('crbm_piloto');
         const obmSelect = document.getElementById('obm_piloto');
@@ -161,6 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         function atualizarOBMs() {
             const crbm = crbmSelect.value;
             obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
+            obmSelect.disabled = true;
 
             if (crbm && obmPorCrbm[crbm]) {
                 obmSelect.disabled = false;
@@ -168,16 +176,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const option = document.createElement('option');
                     option.value = obm;
                     option.textContent = obm;
+                    if (obm === valorSalvoOBM) {
+                        option.selected = true;
+                    }
                     obmSelect.appendChild(option);
                 });
-            } else {
-                obmSelect.disabled = true;
             }
-            obmSelect.value = valorSalvoOBM;
         }
 
         crbmSelect.addEventListener('change', atualizarOBMs);
-        atualizarOBMs();
+        atualizarOBMs(); // Carga inicial
     }
 
     const successMessage = document.querySelector('.success-message-box');

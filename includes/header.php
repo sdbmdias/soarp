@@ -50,12 +50,12 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOARP - CBMPR</title> 
+    <title>SOARP - CBMPR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body{font-family:Arial,sans-serif;margin:0;padding:0;display:flex;min-height:100vh;background-color:#f0f2f5;color:#333}
         .sidebar{width:250px;background-color:#2c3e50;color:#fff;padding-top:20px;box-shadow:2px 0 5px rgba(0,0,0,.1);display:flex;flex-direction:column;align-items:center}
-        .sidebar ul{list-style:none;padding:0;width:100%;flex-grow:1} 
+        .sidebar ul{list-style:none;padding:0;width:100%;flex-grow:1}
         .sidebar ul li a{display:flex;align-items:center;padding:15px 20px;color:#fff;text-decoration:none;transition:background-color .3s ease;font-size:16px;line-height:1.2}
         .sidebar ul li a i{margin-right:15px;font-size:20px;width:25px;text-align:center}
         .sidebar ul li a:hover,.sidebar ul li a.active{background-color:#34495e;border-left:5px solid #3498db;padding-left:15px}
@@ -66,14 +66,14 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .sidebar ul li .submenu{list-style:none;padding:0;max-height:0;overflow:hidden;transition:max-height .3s ease-out;background-color:#34495e}
         .sidebar ul li .submenu li a{padding:10px 20px 10px 45px;font-size:.95em;background-color:transparent}
         .sidebar ul li .submenu li a:hover,.sidebar ul li .submenu li a.active{background-color:#3f5872;border-left:5px solid #3498db}
-        .sidebar ul li .submenu.open{max-height:250px}
-        
+        .sidebar ul li .submenu.open{max-height:350px}
+
         .main-content{flex-grow:1;padding:30px;background-color:#f0f2f5;color:#333}
         .main-content h1{color:#2c3e50;margin-bottom:20px}
         .success-message-box,.error-message-box{padding:15px;border-radius:5px;text-align:center;font-weight:700;margin-bottom:20px;width:80%;max-width:700px;margin-left:auto;margin-right:auto;box-shadow:0 2px 5px rgba(0,0,0,.1);opacity:1;transition:opacity .5s ease-out 3s}
         .success-message-box{background-color:#d4edda;color:#155724;border:1px solid #c3e6cb}
         .error-message-box{background-color:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
-        
+
         .form-container, .table-container {
             background-color: #fff;
             padding: 30px;
@@ -97,7 +97,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .form-actions button[type="submit"]:hover{background-color:#218838}
         .form-actions button:disabled{background-color:#a5d6a7;cursor:not-allowed}
         .data-table{width:100%;border-collapse:collapse;margin-top:15px}
-        
+
         .data-table th, .data-table td {
             padding: 12px 10px;
             border-bottom: 1px solid #eee;
@@ -142,7 +142,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             <li><a href="manutencao.php"><i class="fas fa-tools"></i> Manutenção</a></li>
             <li><a href="checklist.php"><i class="fas fa-check-square"></i> Checklist/Documentos</a></li> <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
             <li><a href="#"><i class="fas fa-file-pdf"></i> Relatórios</a></li>
-            
+
             <?php if ($isAdmin): ?>
             <li class="has-submenu" id="admin-menu">
                 <a href="#" id="admin-menu-toggle"><i class="fas fa-user-shield"></i> Admin <i class="fas fa-chevron-down submenu-arrow"></i></a>
@@ -150,14 +150,16 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
                     <li><a href="cadastro_aeronaves.php">Cadastro de Aeronaves</a></li>
                     <li><a href="cadastro_pilotos.php">Cadastro de Pilotos</a></li>
                     <li><a href="cadastro_controles.php">Cadastro de Controles</a></li>
-                    <li><a href="alertas.php" class="<?php if ($existem_alertas) echo 'menu-alert'; ?>">Alertas</a></li> 
+                    <li><a href="cadastro_modelos.php">Cadastro de Modelos</a></li>
+                    <li><a href="cadastro_crbm_obm.php">Cadastro de CRBM/OBM</a></li>
+                    <li><a href="alertas.php" class="<?php if ($existem_alertas) echo 'menu-alert'; ?>">Alertas</a></li>
                 </ul>
             </li>
             <?php endif; ?>
 
             <li><a href="logout.php" style="color: #e74c3c;"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
         </ul>
-        
+
         <?php if (!empty($nome_perfil)): ?>
         <div class="user-role-display">
             <p>Você está logado como:<br><strong><?php echo htmlspecialchars($nome_perfil); ?></strong></p>

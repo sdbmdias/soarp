@@ -14,21 +14,45 @@ $aeronave_data = null;
 
 $aeronave_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['aeronave_id']) ? intval($_POST['aeronave_id']) : null);
 
+// Busca prefixos em uso, excluindo o da aeronave atual
 $usados_prefixos = [];
 if ($aeronave_id) {
-    $sql_used_prefixes = "SELECT prefixo FROM aeronaves WHERE id != ?";
-    $stmt_prefixes = $conn->prepare($sql_used_prefixes);
-    if ($stmt_prefixes) {
-        $stmt_prefixes->bind_param("i", $aeronave_id);
-        $stmt_prefixes->execute();
-        $result_used_prefixes = $stmt_prefixes->get_result();
-        while ($row_prefix = $result_used_prefixes->fetch_assoc()) {
-            $usados_prefixos[] = $row_prefix['prefixo'];
-        }
-        $stmt_prefixes->close();
+    $stmt_prefixes = $conn->prepare("SELECT prefixo FROM aeronaves WHERE id != ?");
+    $stmt_prefixes->bind_param("i", $aeronave_id);
+    $stmt_prefixes->execute();
+    $result_used_prefixes = $stmt_prefixes->get_result();
+    while ($row_prefix = $result_used_prefixes->fetch_assoc()) {
+        $usados_prefixos[] = $row_prefix['prefixo'];
+    }
+    $stmt_prefixes->close();
+}
+
+// Busca fabricantes e modelos do banco de dados
+$fabricantes_e_modelos = [];
+$sql_modelos = "SELECT fabricante, modelo FROM fabricantes_modelos WHERE tipo = 'Aeronave' ORDER BY CASE WHEN fabricante = 'DJI' THEN 1 WHEN fabricante = 'Autel Robotics' THEN 2 ELSE 3 END, fabricante, modelo";
+$result_modelos = $conn->query($sql_modelos);
+if ($result_modelos) {
+    while ($row = $result_modelos->fetch_assoc()) {
+        $fabricantes_e_modelos[$row['fabricante']][] = $row['modelo'];
     }
 }
 
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
+
+// Lógica de atualização do formulário
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $aeronave_id) {
     $fabricante = htmlspecialchars($_POST['fabricante']);
     $modelo = htmlspecialchars($_POST['modelo']);
@@ -42,7 +66,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $aeronave_id) {
     $pmd_kg = floatval($_POST['pmd_kg']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $status = htmlspecialchars($_POST['status']);
-    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']);
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
     $stmt = $conn->prepare("UPDATE aeronaves SET fabricante=?, modelo=?, prefixo=?, numero_serie=?, cadastro_sisant=?, validade_sisant=?, crbm=?, obm=?, tipo_drone=?, pmd_kg=?, data_aquisicao=?, status=?, homologacao_anatel=?, info_adicionais=? WHERE id = ?");
@@ -56,6 +80,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $aeronave_id) {
     $stmt->close();
 }
 
+// Carrega os dados da aeronave para preencher o formulário
 if ($aeronave_id) {
     $stmt_load = $conn->prepare("SELECT * FROM aeronaves WHERE id = ?");
     $stmt_load->bind_param("i", $aeronave_id);
@@ -88,8 +113,9 @@ if ($aeronave_id) {
                     <label for="fabricante">Fabricante:</label>
                     <select id="fabricante" name="fabricante" required>
                         <option value="">Selecione o Fabricante</option>
-                        <option value="DJI" <?php echo ($aeronave_data['fabricante'] == 'DJI') ? 'selected' : ''; ?>>DJI</option>
-                        <option value="Autel Robotics" <?php echo ($aeronave_data['fabricante'] == 'Autel Robotics') ? 'selected' : ''; ?>>Autel Robotics</option>
+                        <?php foreach (array_keys($fabricantes_e_modelos) as $fab): ?>
+                            <option value="<?php echo htmlspecialchars($fab); ?>" <?php echo ($aeronave_data['fabricante'] == $fab) ? 'selected' : ''; ?>><?php echo htmlspecialchars($fab); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -116,14 +142,11 @@ if ($aeronave_id) {
                     <label for="crbm">CRBM:</label>
                     <select id="crbm" name="crbm" required>
                         <option value="">Selecione o CRBM</option>
-                        <option value="CCB" <?php echo ($aeronave_data['crbm'] == 'CCB') ? 'selected' : ''; ?>>CCB</option>
-                        <option value="BOA" <?php echo ($aeronave_data['crbm'] == 'BOA') ? 'selected' : ''; ?>>BOA</option>
-                        <option value="GOST" <?php echo ($aeronave_data['crbm'] == 'GOST') ? 'selected' : ''; ?>>GOST</option>
-                        <option value="1CRBM" <?php echo ($aeronave_data['crbm'] == '1CRBM') ? 'selected' : ''; ?>>1º CRBM</option>
-                        <option value="2CRBM" <?php echo ($aeronave_data['crbm'] == '2CRBM') ? 'selected' : ''; ?>>2º CRBM</option>
-                        <option value="3CRBM" <?php echo ($aeronave_data['crbm'] == '3CRBM') ? 'selected' : ''; ?>>3º CRBM</option>
-                        <option value="4CRBM" <?php echo ($aeronave_data['crbm'] == '4CRBM') ? 'selected' : ''; ?>>4º CRBM</option>
-                        <option value="5CRBM" <?php echo ($aeronave_data['crbm'] == '5CRBM') ? 'selected' : ''; ?>>5º CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm_unidade): ?>
+                            <option value="<?php echo htmlspecialchars($crbm_unidade); ?>" <?php echo ($aeronave_data['crbm'] == $crbm_unidade) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm_unidade)); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -179,16 +202,8 @@ if ($aeronave_id) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('editAeronaveForm')) {
-        const modelosPorFabricante = {
-            'DJI': [ 'DJI FlyCart 30', 'DJI FlyCart 100', 'DJI Mini 3 Pro', 'DJI Mini 4 Pro', 'Matrice 30 Thermal (M30T)', 'Matrice 300 RTK', 'Matrice 350 RTK', 'Mavic 2 Enterprise', 'Mavic 2 Enterprise Advanced', 'Mavic 3 Classic', 'Mavic 3 Enterprise (M3E)', 'Mavic 3 Multispectral (M3M)', 'Mavic 3 Pro', 'Mavic 3 Thermal (M3T)', 'Phantom 3', 'Phantom 4 Pro V2.0', 'Phantom 4 RTK' ],
-            'Autel Robotics': [ 'Dragonfish Lite', 'Dragonfish Pro', 'Dragonfish Standard', 'EVO II Dual 640T (V1/V2)', 'EVO II Dual 640T V3', 'EVO II Enterprise V3', 'EVO II Pro (V1/V2)', 'EVO II Pro V3', 'EVO Lite+', 'EVO MAX 4N', 'EVO MAX 4T', 'EVO Nano+' ]
-        };
-        const obmPorCrbm = {
-            'CCB': ['BM-1', 'BM-2', 'BM-3', 'BM-4', 'BM-5', 'BM-6', 'BM-7', 'BM-8'], 'BOA': ['SOARP'], 'GOST': ['GOST'],
-            '1CRBM': ['1º BBM', '6º BBM', '7º BBM', '8º BBM'], '2CRBM': ['3º BBM', '11º BBM', '1ª CIBM'],
-            '3CRBM': ['4º BBM', '9º BBM', '10º BBM', '13º BBM'], '4CRBM': ['5º BBM', '2ª CIBM', '4ª CIBM', '5ª CIBM'],
-            '5CRBM': ['2º BBM', '12º BBM', '6ª CIBM']
-        };
+        const modelosPorFabricante = <?php echo json_encode($fabricantes_e_modelos); ?>;
+        const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
         const fabricanteSelect = document.getElementById('fabricante');
         const modeloSelect = document.getElementById('modelo');
@@ -197,7 +212,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const prefixoSelect = document.getElementById('prefixo');
 
         const valorSalvo = {
+            fabricante: "<?php echo addslashes($aeronave_data['fabricante'] ?? ''); ?>",
             modelo: "<?php echo addslashes($aeronave_data['modelo'] ?? ''); ?>",
+            crbm: "<?php echo addslashes($aeronave_data['crbm'] ?? ''); ?>",
             obm: "<?php echo addslashes($aeronave_data['obm'] ?? ''); ?>",
             prefixo: "<?php echo addslashes($aeronave_data['prefixo'] ?? ''); ?>"
         };
@@ -205,39 +222,50 @@ document.addEventListener('DOMContentLoaded', function() {
         function atualizarModelos() {
             const fabricante = fabricanteSelect.value;
             modeloSelect.innerHTML = '<option value="">Selecione o Modelo</option>';
+            modeloSelect.disabled = true;
+
             if (fabricante && modelosPorFabricante[fabricante]) {
+                modeloSelect.disabled = false;
                 modelosPorFabricante[fabricante].forEach(function(modelo) {
                     const option = document.createElement('option');
                     option.value = modelo;
                     option.textContent = modelo;
+                    if (modelo === valorSalvo.modelo) {
+                        option.selected = true;
+                    }
                     modeloSelect.appendChild(option);
                 });
             }
-            modeloSelect.value = valorSalvo.modelo;
         }
 
         function atualizarOBMs() {
             const crbm = crbmSelect.value;
             obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
+            obmSelect.disabled = true;
+
             if (crbm && obmPorCrbm[crbm]) {
+                obmSelect.disabled = false;
                 obmPorCrbm[crbm].forEach(function(obm) {
                     const option = document.createElement('option');
                     option.value = obm;
                     option.textContent = obm;
+                    if (obm === valorSalvo.obm) {
+                        option.selected = true;
+                    }
                     obmSelect.appendChild(option);
                 });
             }
-            obmSelect.value = valorSalvo.obm;
         }
 
         function gerarPrefixos() {
             prefixoSelect.innerHTML = '';
             const prefixosUsados = <?php echo json_encode($usados_prefixos); ?>;
-            
+
             if (valorSalvo.prefixo) {
                 const optionAtual = document.createElement('option');
                 optionAtual.value = valorSalvo.prefixo;
                 optionAtual.textContent = valorSalvo.prefixo;
+                optionAtual.selected = true;
                 prefixoSelect.appendChild(optionAtual);
             }
 
@@ -254,17 +282,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 prefixoSelect.appendChild(option);
             }
-            prefixoSelect.value = valorSalvo.prefixo;
         }
 
         fabricanteSelect.addEventListener('change', atualizarModelos);
         crbmSelect.addEventListener('change', atualizarOBMs);
 
+        // Carga inicial dos dados
         atualizarModelos();
         atualizarOBMs();
         gerarPrefixos();
     }
-    
+
     const successMessage = document.querySelector('.success-message-box');
     if (successMessage) {
         setTimeout(function() {

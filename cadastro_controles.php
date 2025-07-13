@@ -18,6 +18,31 @@ if ($result_aeronaves->num_rows > 0) {
     }
 }
 
+// Busca fabricantes e modelos de CONTROLES do banco de dados
+$fabricantes_e_modelos_controles = [];
+$sql_modelos_ctrl = "SELECT fabricante, modelo FROM fabricantes_modelos WHERE tipo = 'Controle' ORDER BY CASE WHEN fabricante = 'DJI' THEN 1 WHEN fabricante = 'Autel Robotics' THEN 2 ELSE 3 END, fabricante, modelo";
+$result_modelos_ctrl = $conn->query($sql_modelos_ctrl);
+if ($result_modelos_ctrl) {
+    while ($row = $result_modelos_ctrl->fetch_assoc()) {
+        $fabricantes_e_modelos_controles[$row['fabricante']][] = $row['modelo'];
+    }
+}
+
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
+
 $mensagem_status = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -26,7 +51,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $numero_serie = htmlspecialchars($_POST['numero_serie']);
     $aeronave_id = !empty($_POST['aeronave_id']) ? intval($_POST['aeronave_id']) : NULL;
     $status = htmlspecialchars($_POST['status']);
-    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']); // NOVO CAMPO
+    $homologacao_anatel = htmlspecialchars($_POST['homologacao_anatel']);
     $data_aquisicao = htmlspecialchars($_POST['data_aquisicao']);
     $info_adicionais = htmlspecialchars($_POST['info_adicionais']);
 
@@ -77,8 +102,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="fabricante">Fabricante:</label>
                     <select id="fabricante" name="fabricante" required>
                         <option value="">Selecione o Fabricante</option>
-                        <option value="DJI">DJI</option>
-                        <option value="Autel Robotics">Autel Robotics</option>
+                        <?php foreach (array_keys($fabricantes_e_modelos_controles) as $fab): ?>
+                            <option value="<?php echo htmlspecialchars($fab); ?>"><?php echo htmlspecialchars($fab); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -96,7 +122,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <select id="aeronave_id" name="aeronave_id">
                         <option value="">Nenhuma (Controle Reserva)</option>
                         <?php foreach ($aeronaves_disponiveis as $aeronave): ?>
-                            <option 
+                            <option
                                 value="<?php echo htmlspecialchars($aeronave['id'] ?? ''); ?>"
                                 data-crbm="<?php echo htmlspecialchars($aeronave['crbm'] ?? ''); ?>"
                                 data-obm="<?php echo htmlspecialchars($aeronave['obm'] ?? ''); ?>"
@@ -110,14 +136,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="crbm">CRBM de Lotação:</label>
                     <select id="crbm" name="crbm" required>
                         <option value="">Selecione o CRBM</option>
-                        <option value="CCB">CCB</option>
-                        <option value="BOA">BOA</option>
-                        <option value="GOST">GOST</option>
-                        <option value="1CRBM">1º CRBM</option>
-                        <option value="2CRBM">2º CRBM</option>
-                        <option value="3CRBM">3º CRBM</option>
-                        <option value="4CRBM">4º CRBM</option>
-                        <option value="5CRBM">5º CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm_unidade): ?>
+                            <option value="<?php echo htmlspecialchars($crbm_unidade); ?>"><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm_unidade)); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -158,16 +179,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const modelosControlePorFabricante = {
-        'DJI': ['RC', 'RC 2', 'RC Pro', 'RC Plus', 'Smart Controller'],
-        'Autel Robotics': ['Smart Controller V3', 'Smart Controller SE']
-    };
-    const obmPorCrbm = {
-        'CCB': ['BM-1', 'BM-2', 'BM-3', 'BM-4', 'BM-5', 'BM-6', 'BM-7', 'BM-8'], 'BOA': ['SOARP'], 'GOST': ['GOST'],
-        '1CRBM': ['1º BBM', '6º BBM', '7º BBM', '8º BBM'], '2CRBM': ['3º BBM', '11º BBM', '1ª CIBM'],
-        '3CRBM': ['4º BBM', '9º BBM', '10º BBM', '13º BBM'], '4CRBM': ['5º BBM', '2ª CIBM', '4ª CIBM', '5ª CIBM'],
-        '5CRBM': ['2º BBM', '12º BBM', '6ª CIBM']
-    };
+    const modelosControlePorFabricante = <?php echo json_encode($fabricantes_e_modelos_controles); ?>;
+    const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
     const form = document.getElementById('controleForm');
     const saveButton = document.getElementById('saveButton');
@@ -177,12 +190,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const crbmSelect = document.getElementById('crbm');
     const obmSelect = document.getElementById('obm');
     const aeronaveSelect = document.getElementById('aeronave_id');
-    
+
     function checkFormValidity() {
         const allValid = requiredFields.every(field => field.disabled ? true : field.value.trim() !== '');
         saveButton.disabled = !allValid;
     }
-    
+
     requiredFields.forEach(field => {
         field.addEventListener('input', checkFormValidity);
         field.addEventListener('change', checkFormValidity);
@@ -224,19 +237,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     aeronaveSelect.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
-        
-        if (this.value) { 
+
+        if (this.value) {
             const crbm = selectedOption.getAttribute('data-crbm');
             const obm = selectedOption.getAttribute('data-obm');
 
             crbmSelect.value = crbm;
             crbmSelect.dispatchEvent(new Event('change'));
-            
-            setTimeout(() => { obmSelect.value = obm; }, 0);
+
+            setTimeout(() => { obmSelect.value = obm; checkFormValidity(); }, 50); // Delay
 
             crbmSelect.disabled = true;
-            obmSelect.disabled = true; 
-        } else { 
+            obmSelect.disabled = true;
+        } else {
             crbmSelect.disabled = false;
             obmSelect.disabled = true;
             crbmSelect.value = '';

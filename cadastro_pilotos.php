@@ -11,6 +11,21 @@ if (!$isAdmin) {
 // 3. LÓGICA ESPECÍFICA DA PÁGINA
 $mensagem_status = "";
 
+// Busca CRBMs e OBMs com a nova ordenação
+$unidades = [];
+$sql_unidades = "
+    SELECT crbm, obm FROM crbm_obm 
+    ORDER BY 
+        CASE WHEN crbm NOT LIKE '%CRBM' THEN 1 ELSE 2 END, crbm, 
+        CASE WHEN obm LIKE '%BBM%' THEN 1 WHEN obm LIKE '%CIBM%' THEN 2 ELSE 3 END, obm";
+$result_unidades = $conn->query($sql_unidades);
+if ($result_unidades) {
+    while($row = $result_unidades->fetch_assoc()) {
+        $unidades[$row['crbm']][] = $row['obm'];
+    }
+}
+
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $nome_completo = htmlspecialchars($_POST['nome_completo']);
     $rg = htmlspecialchars($_POST['rg']);
@@ -26,7 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $senha = $_POST['senha'];
     $tipo_usuario = htmlspecialchars($_POST['tipo_usuario']);
 
-    $senha_redefinida = 0; 
+    $senha_redefinida = 0;
     $senha_hashed = password_hash($senha, PASSWORD_DEFAULT);
 
     $stmt = $conn->prepare("INSERT INTO pilotos (nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, senha, tipo_usuario, senha_redefinida) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -73,14 +88,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="crbm_piloto">CRBM:</label>
                     <select id="crbm_piloto" name="crbm_piloto" required>
                         <option value="">Selecione o CRBM</option>
-                        <option value="CCB">CCB</option>
-                        <option value="BOA">BOA</option>
-                        <option value="GOST">GOST</option>
-                        <option value="1CRBM">1º CRBM</option>
-                        <option value="2CRBM">2º CRBM</option>
-                        <option value="3CRBM">3º CRBM</option>
-                        <option value="4CRBM">4º CRBM</option>
-                        <option value="5CRBM">5º CRBM</option>
+                        <?php foreach (array_keys($unidades) as $crbm): ?>
+                            <option value="<?php echo htmlspecialchars($crbm); ?>"><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm)); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -134,12 +144,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const obmPorCrbm = {
-        'CCB': ['BM-1', 'BM-2', 'BM-3', 'BM-4', 'BM-5', 'BM-6', 'BM-7', 'BM-8'], 'BOA': ['SOARP'], 'GOST': ['GOST'],
-        '1CRBM': ['1º BBM', '6º BBM', '7º BBM', '8º BBM'], '2CRBM': ['3º BBM', '11º BBM', '1ª CIBM'],
-        '3CRBM': ['4º BBM', '9º BBM', '10º BBM', '13º BBM'], '4CRBM': ['5º BBM', '2ª CIBM', '4ª CIBM', '5ª CIBM'],
-        '5CRBM': ['2º BBM', '12º BBM', '6ª CIBM']
-    };
+    const obmPorCrbm = <?php echo json_encode($unidades); ?>;
 
     const form = document.getElementById('pilotoForm');
     const saveButton = document.getElementById('saveButton');
@@ -160,6 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
     crbmSelect.addEventListener('change', function() {
         const crbm = this.value;
         obmSelect.innerHTML = '<option value="">Selecione a OBM/Seção</option>';
+        obmSelect.disabled = true;
 
         if (crbm && obmPorCrbm[crbm]) {
             obmSelect.disabled = false;
@@ -169,12 +175,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.textContent = obm;
                 obmSelect.appendChild(option);
             });
-        } else {
-            obmSelect.disabled = true;
         }
         checkFormValidity();
     });
-    
+
     checkFormValidity();
 });
 </script>
