@@ -140,7 +140,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             <li><a href="listar_aeronaves.php"><i class="fas fa-plane"></i> Aeronaves</a></li>
             <li><a href="listar_controles.php"><i class="fas fa-gamepad"></i> Controles</a></li>
             <li><a href="manutencao.php"><i class="fas fa-tools"></i> Manutenção</a></li>
-            <li><a href="checklist.php"><i class="fas fa-check-square"></i> Checklist</a></li> <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
+            <li><a href="checklist.php"><i class="fas fa-check-square"></i> Checklist/Documentos</a></li> <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
             <li><a href="#"><i class="fas fa-file-pdf"></i> Relatórios</a></li>
             
             <?php if ($isAdmin): ?>
