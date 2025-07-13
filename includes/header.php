@@ -25,7 +25,7 @@ if (!isset($_SESSION['user_id']) && !in_array(basename($_SERVER['PHP_SELF']), $p
 $isAdmin = isset($_SESSION['user_type']) && $_SESSION['user_type'] == 'administrador';
 $isPiloto = isset($_SESSION['user_type']) && $_SESSION['user_type'] == 'piloto';
 
-// NOVO: Define o nome do perfil para exibição no menu
+// Define o nome do perfil para exibição no menu
 $nome_perfil = '';
 if (isset($_SESSION['user_type'])) {
     $nome_perfil = ucfirst($_SESSION['user_type']); // Deixa a primeira letra maiúscula (Administrador/Piloto)
@@ -55,7 +55,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
     <style>
         body{font-family:Arial,sans-serif;margin:0;padding:0;display:flex;min-height:100vh;background-color:#f0f2f5;color:#333}
         .sidebar{width:250px;background-color:#2c3e50;color:#fff;padding-top:20px;box-shadow:2px 0 5px rgba(0,0,0,.1);display:flex;flex-direction:column;align-items:center}
-        .sidebar ul{list-style:none;padding:0;width:100%;flex-grow:1} /* Adicionado flex-grow para empurrar o user-role para baixo */
+        .sidebar ul{list-style:none;padding:0;width:100%;flex-grow:1} 
         .sidebar ul li a{display:flex;align-items:center;padding:15px 20px;color:#fff;text-decoration:none;transition:background-color .3s ease;font-size:16px;line-height:1.2}
         .sidebar ul li a i{margin-right:15px;font-size:20px;width:25px;text-align:center}
         .sidebar ul li a:hover,.sidebar ul li a.active{background-color:#34495e;border-left:5px solid #3498db;padding-left:15px}
@@ -118,7 +118,6 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .status-baixada, .status-desativado { color: #dc3545; font-weight: 700; }
         .status-adida { color: #007bff; font-weight: 700; }
 
-        /* NOVO ESTILO PARA EXIBIÇÃO DO PERFIL */
         .user-role-display {
             padding: 15px 20px;
             text-align: center;
@@ -127,7 +126,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             line-height: 1.4;
             border-top: 1px solid #4a627a;
             width: 100%;
-            box-sizing: border-box; /* Garante que o padding não aumente a largura */
+            box-sizing: border-box;
         }
         .user-role-display p { margin: 0; }
         .user-role-display strong { color: #fff; font-size: 15px; }
@@ -141,7 +140,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
             <li><a href="listar_aeronaves.php"><i class="fas fa-plane"></i> Aeronaves</a></li>
             <li><a href="listar_controles.php"><i class="fas fa-gamepad"></i> Controles</a></li>
             <li><a href="manutencao.php"><i class="fas fa-tools"></i> Manutenção</a></li>
-            <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
+            <li><a href="checklist.php"><i class="fas fa-check-square"></i> Checklist</a></li> <li><a href="#"><i class="fas fa-map-marked-alt"></i> Missões</a></li>
             <li><a href="#"><i class="fas fa-file-pdf"></i> Relatórios</a></li>
             
             <?php if ($isAdmin): ?>
