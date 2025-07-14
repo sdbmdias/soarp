@@ -54,7 +54,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
             $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
 
-            // Atribui valores do log agregado a variáveis
             $altitude_maxima = $logData['altitude_maxima'];
             $total_distancia_percorrida = $logData['total_distancia_percorrida'];
             $total_tempo_voo = $logData['total_tempo_voo'];
@@ -74,47 +73,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $stmt_pilotos_assoc->execute();
             }
             $stmt_pilotos_assoc->close();
-
-            $upload_dir = 'uploads/gpx/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
             
-            // Prepara a inserção de ficheiros GPX
             $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            
-            // Prepara a inserção de coordenadas
             $stmt_coords = $conn->prepare("INSERT INTO missao_coordenadas (gpx_file_id, latitude, longitude, altitude, timestamp_ponto) VALUES (?, ?, ?, ?, ?)");
 
             $individualFileData = $gpxProcessor->getIndividualFileData();
             foreach ($_FILES['gpx_files']['name'] as $key => $name) {
                 if ($_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
-                    $tmp_name = $_FILES['gpx_files']['tmp_name'][$key];
-                    $file_name_uniq = $missao_id . '_' . uniqid() . '_' . basename($name);
-                    $file_path = $upload_dir . $file_name_uniq;
                     
-                    if (move_uploaded_file($tmp_name, $file_path)) {
-                        $file_log_data = $individualFileData[$key];
-                        
-                        $tempo_voo_individual = $file_log_data['tempo_voo'];
-                        $distancia_individual = $file_log_data['distancia_percorrida'];
-                        $altura_maxima_individual = $file_log_data['altura_maxima'];
-                        $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
-                        $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
-                        
-                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
-                        $stmt_gpx->execute();
-                        $gpx_file_id = $conn->insert_id;
+                    $file_log_data = $individualFileData[$key];
+                    // ### CORREÇÃO AQUI ###
+                    // Definimos o caminho como uma string vazia em vez de null.
+                    $file_path_db = ''; 
 
-                        // Insere todas as coordenadas para este ficheiro
-                        foreach ($file_log_data['trackPoints'] as $point) {
-                            $lat = $point['lat'];
-                            $lon = $point['lon'];
-                            $ele = $point['ele'];
-                            $time = $point['time']->format('Y-m-d H:i:s');
-                            $stmt_coords->bind_param("idds", $gpx_file_id, $lat, $lon, $ele, $time);
-                            $stmt_coords->execute();
-                        }
+                    $tempo_voo_individual = $file_log_data['tempo_voo'];
+                    $distancia_individual = $file_log_data['distancia_percorrida'];
+                    $altura_maxima_individual = $file_log_data['altura_maxima'];
+                    $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
+                    $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
+                    
+                    $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path_db, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
+                    $stmt_gpx->execute();
+                    $gpx_file_id = $conn->insert_id;
+
+                    foreach ($file_log_data['trackPoints'] as $point) {
+                        $lat = $point['lat'];
+                        $lon = $point['lon'];
+                        $ele = $point['ele'];
+                        $time = $point['time']->format('Y-m-d H:i:s');
+                        
+                        $stmt_coords->bind_param("iddds", $gpx_file_id, $lat, $lon, $ele, $time);
+                        $stmt_coords->execute();
                     }
                 }
             }
@@ -214,59 +203,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Passa os dados de PHP para JavaScript
     const pilotosPorCrbm = <?php echo json_encode($pilotos_por_crbm); ?>;
     const isUserAdmin = <?php echo json_encode($isAdmin); ?>;
-
     const aeronaveSelect = document.getElementById('aeronave_id');
     const pilotsContainer = document.getElementById('pilots-container');
     const addPilotBtn = document.getElementById('add-pilot-btn');
-
     let availablePilots = [];
 
-    // Função para criar um novo seletor de piloto
     function createPilotSelector(pilots) {
         const wrapper = document.createElement('div');
         wrapper.className = 'pilot-selector-wrapper';
-
         const select = document.createElement('select');
         select.name = 'pilotos[]';
         select.className = 'form-control';
         select.required = true;
-
         const placeholder = document.createElement('option');
         placeholder.value = "";
         placeholder.textContent = "Selecione um piloto...";
         select.appendChild(placeholder);
-        
         pilots.forEach(piloto => {
             const option = document.createElement('option');
             option.value = piloto.id;
             option.textContent = `${piloto.posto_graduacao} ${piloto.nome_completo}`;
             select.appendChild(option);
         });
-        
         wrapper.appendChild(select);
         return wrapper;
     }
 
-    // Função para atualizar a lista de pilotos disponíveis
     function updateAvailablePilots(crbm) {
         if (isUserAdmin) {
-            // Admin vê todos os pilotos
             availablePilots = Object.values(pilotosPorCrbm).flat();
         } else {
-            // Piloto vê apenas os do CRBM da aeronave
             availablePilots = pilotosPorCrbm[crbm] || [];
         }
     }
-    
-    // Evento quando a aeronave é selecionada
+
     aeronaveSelect.addEventListener('change', function() {
         pilotsContainer.innerHTML = '';
         const selectedOption = this.options[this.selectedIndex];
         const crbm = selectedOption.dataset.crbm;
-
         if (crbm) {
             updateAvailablePilots(crbm);
             if(availablePilots.length > 0) {
@@ -283,16 +259,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Evento para adicionar um novo piloto
     addPilotBtn.addEventListener('click', function() {
         const currentSelectors = pilotsContainer.querySelectorAll('select');
         const selectedPilotIds = Array.from(currentSelectors).map(s => s.value).filter(Boolean);
-        
         const remainingPilots = availablePilots.filter(p => !selectedPilotIds.includes(p.id.toString()));
-
         if (remainingPilots.length > 0) {
             const newSelectorWrapper = createPilotSelector(remainingPilots);
-            
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.textContent = 'Remover';
@@ -300,12 +272,10 @@ document.addEventListener('DOMContentLoaded', function() {
             removeBtn.style.backgroundColor = '#dc3545';
             removeBtn.onclick = function() {
                 newSelectorWrapper.remove();
-                addPilotBtn.disabled = false; // Habilita o botão novamente ao remover
+                addPilotBtn.disabled = false;
             };
-            
             newSelectorWrapper.appendChild(removeBtn);
             pilotsContainer.appendChild(newSelectorWrapper);
-
             if (remainingPilots.length <= 1) {
                 addPilotBtn.disabled = true;
             }
@@ -313,8 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
             addPilotBtn.disabled = true;
         }
     });
-    
-    // Lógica para mostrar ficheiros GPX selecionados
+
     const gpxInput = document.getElementById('gpx_files');
     const fileListDiv = document.getElementById('file-list');
     gpxInput.addEventListener('change', function() {
@@ -329,8 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fileListDiv.appendChild(list);
         }
     });
-    
-    // Redirecionamento após sucesso
+
     const successMessage = document.querySelector('.success-message-box');
     if (successMessage) {
         setTimeout(function() {
