@@ -29,7 +29,6 @@ if ($isAdmin && isset($_GET['delete_id'])) {
             }
             $stmt_get_files->close();
 
-            // Apaga as associações de pilotos antes de apagar a missão
             $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
             $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_pilots->execute();
@@ -57,13 +56,31 @@ if ($isAdmin && isset($_GET['delete_id'])) {
 }
 
 
-// --- LÓGICA PARA BUSCAR AS MISSÕES COM MÚLTIPLOS PILOTOS ---
+// --- LÓGICA PARA BUSCAR AS MISSÕES COM ORDENAÇÃO DE PILOTOS POR GRADUAÇÃO ---
 $missoes = [];
 $sql_missoes = "
     SELECT 
         m.id, m.data_ocorrencia, m.tipo_ocorrencia, m.rgo_ocorrencia, m.total_tempo_voo,
         a.prefixo AS aeronave_prefixo,
-        GROUP_CONCAT(CONCAT(p.posto_graduacao, ' ', p.nome_completo) SEPARATOR '<br>') AS pilotos_nomes
+        GROUP_CONCAT(CONCAT(p.posto_graduacao, ' ', p.nome_completo) 
+            ORDER BY
+                CASE p.posto_graduacao
+                    WHEN 'Cel. QOBM' THEN 1
+                    WHEN 'Ten. Cel. QOBM' THEN 2
+                    WHEN 'Maj. QOBM' THEN 3
+                    WHEN 'Cap. QOBM' THEN 4
+                    WHEN '1º Ten. QOBM' THEN 5
+                    WHEN '2º Ten. QOBM' THEN 6
+                    WHEN 'Asp. Oficial' THEN 7
+                    WHEN 'Sub. Ten. QPBM' THEN 8
+                    WHEN '1º Sgt. QPBM' THEN 9
+                    WHEN '2º Sgt. QPBM' THEN 10
+                    WHEN '3º Sgt. QPBM' THEN 11
+                    WHEN 'Cb. QPBM' THEN 12
+                    WHEN 'Sd. QPBM' THEN 13
+                    ELSE 14
+                END
+            SEPARATOR '<br>') AS pilotos_nomes
     FROM missoes m
     JOIN aeronaves a ON m.aeronave_id = a.id
     LEFT JOIN missoes_pilotos mp ON m.id = mp.missao_id
@@ -115,14 +132,14 @@ function formatarTempoVoo($segundos) {
                 <?php if (!empty($missoes)): ?>
                     <?php foreach ($missoes as $missao): ?>
                         <tr>
-                            <td><?php echo date("d/m/Y", strtotime($missao['data_ocorrencia'])); ?></td>
-                            <td><?php echo htmlspecialchars($missao['aeronave_prefixo']); ?></td>
-                            <td style="text-align: left;"><?php echo $missao['pilotos_nomes'] ?? 'Nenhum piloto associado'; ?></td>
-                            <td style="text-align: left;">
+                            <td style="text-align: center;"><?php echo date("d/m/Y", strtotime($missao['data_ocorrencia'])); ?></td>
+                            <td style="text-align: center;"><?php echo htmlspecialchars($missao['aeronave_prefixo']); ?></td>
+                            <td style="text-align: center;"><?php echo $missao['pilotos_nomes'] ?? 'Nenhum piloto associado'; ?></td>
+                            <td style="text-align: center;">
                                 <strong><?php echo htmlspecialchars($missao['rgo_ocorrencia'] ?? 'MISSÃO SEM RGO'); ?></strong><br>
                                 <small><?php echo htmlspecialchars($missao['tipo_ocorrencia']); ?></small>
                             </td>
-                            <td><?php echo formatarTempoVoo($missao['total_tempo_voo']); ?></td>
+                            <td style="text-align: center;"><?php echo formatarTempoVoo($missao['total_tempo_voo']); ?></td>
                             <td class="action-buttons">
                                 <a href="ver_missao.php?id=<?php echo $missao['id']; ?>" class="edit-btn">Ver Detalhes</a>
                                 <?php if ($isAdmin): ?>

@@ -34,12 +34,29 @@ if ($result_details->num_rows === 1) {
 }
 $stmt_details->close();
 
-// 2. BUSCA OS PILOTOS ENVOLVIDOS NA MISSÃO
+// 2. BUSCA OS PILOTOS ENVOLVIDOS NA MISSÃO (COM ORDENAÇÃO POR GRADUAÇÃO)
 $sql_pilotos = "
     SELECT p.posto_graduacao, p.nome_completo 
     FROM pilotos p 
     JOIN missoes_pilotos mp ON p.id = mp.piloto_id 
     WHERE mp.missao_id = ?
+    ORDER BY
+        CASE p.posto_graduacao
+            WHEN 'Cel. QOBM' THEN 1
+            WHEN 'Ten. Cel. QOBM' THEN 2
+            WHEN 'Maj. QOBM' THEN 3
+            WHEN 'Cap. QOBM' THEN 4
+            WHEN '1º Ten. QOBM' THEN 5
+            WHEN '2º Ten. QOBM' THEN 6
+            WHEN 'Asp. Oficial' THEN 7
+            WHEN 'Sub. Ten. QPBM' THEN 8
+            WHEN '1º Sgt. QPBM' THEN 9
+            WHEN '2º Sgt. QPBM' THEN 10
+            WHEN '3º Sgt. QPBM' THEN 11
+            WHEN 'Cb. QPBM' THEN 12
+            WHEN 'Sd. QPBM' THEN 13
+            ELSE 14
+        END
 ";
 $stmt_pilotos = $conn->prepare($sql_pilotos);
 $stmt_pilotos->bind_param("i", $missao_id);

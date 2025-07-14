@@ -3,7 +3,6 @@
 class GPXProcessor
 {
     private $filesData = [];
-    private $aggregatedData = null;
 
     public function load(string $filePath): bool
     {
@@ -38,12 +37,12 @@ class GPXProcessor
     {
         $fileDistance = 0;
         $fileMaxAltitude = -INF;
-        $takeoffElevation = $trackPoints[0]['ele'];
+        $firstPoint = $trackPoints[0];
+        $takeoffElevation = $firstPoint['ele'];
 
         for ($i = 0; $i < count($trackPoints) - 1; $i++) {
             $p1 = $trackPoints[$i];
             $p2 = $trackPoints[$i + 1];
-
             $fileDistance += $this->haversineGreatCircleDistance($p1['lat'], $p1['lon'], $p2['lat'], $p2['lon']);
             
             $relativeHeight = $p1['ele'] - $takeoffElevation;
@@ -57,9 +56,7 @@ class GPXProcessor
             $fileMaxAltitude = $lastRelativeHeight;
         }
 
-        $firstPoint = $trackPoints[0];
         $fileDuration = $lastPoint['time']->getTimestamp() - $firstPoint['time']->getTimestamp();
-
         $brasiliaTimezone = new DateTimeZone('America/Sao_Paulo');
         
         $this->filesData[] = [
@@ -67,7 +64,8 @@ class GPXProcessor
             'distancia_percorrida' => $fileDistance,
             'altura_maxima' => $fileMaxAltitude,
             'data_decolagem' => (clone $firstPoint['time'])->setTimezone($brasiliaTimezone),
-            'data_pouso' => (clone $lastPoint['time'])->setTimezone($brasiliaTimezone)
+            'data_pouso' => (clone $lastPoint['time'])->setTimezone($brasiliaTimezone),
+            'trackPoints' => $trackPoints // Retorna todos os pontos do trajeto
         ];
     }
 

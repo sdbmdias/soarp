@@ -25,15 +25,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
         $stmt_old_data = $conn->prepare("SELECT aeronave_id, total_distancia_percorrida, total_tempo_voo, altitude_maxima, data_primeira_decolagem, data_ultimo_pouso FROM missoes WHERE id = ?");
         $stmt_old_data->bind_param("i", $missao_id);
         $stmt_old_data->execute();
-        $old_data = $stmt_old_data->get_result()->fetch_assoc();
+        $old_data_result = $stmt_old_data->get_result();
+        $old_data = $old_data_result->fetch_assoc();
         $stmt_old_data->close();
 
         if (!$old_data) {
             throw new Exception("Missão original não encontrada para atualização.");
         }
+        
+        // ### CORREÇÃO 1: Usar variáveis para os dados antigos ###
+        $old_distancia = $old_data['total_distancia_percorrida'];
+        $old_tempo = $old_data['total_tempo_voo'];
+        $old_aeronave_id = $old_data['aeronave_id'];
 
         $stmt_subtract = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada - ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado - ? WHERE aeronave_id = ?");
-        $stmt_subtract->bind_param("ddi", $old_data['total_distancia_percorrida'], $old_data['total_tempo_voo'], $old_data['aeronave_id']);
+        $stmt_subtract->bind_param("ddi", $old_distancia, $old_tempo, $old_aeronave_id);
         $stmt_subtract->execute();
         $stmt_subtract->close();
 
@@ -73,15 +79,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
                     $file_path = $upload_dir . $file_name;
                     if (move_uploaded_file($tmp_name, $file_path)) {
                         $file_log_data = $individualFileData[$key];
+                        // ### CORREÇÃO 2: Usar variáveis para os dados individuais do GPX ###
+                        $tempo_voo_individual = $file_log_data['tempo_voo'];
+                        $distancia_individual = $file_log_data['distancia_percorrida'];
+                        $altura_maxima_individual = $file_log_data['altura_maxima'];
                         $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
                         $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
-                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $file_log_data['tempo_voo'], $file_log_data['distancia_percorrida'], $file_log_data['altura_maxima'], $decolagem_str, $pouso_str);
+                        
+                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
                         $stmt_gpx->execute();
                     }
                 }
             }
             $stmt_gpx->close();
         } else {
+            // Se não houver novos ficheiros, usar os dados antigos para a atualização
             $logData = [
                 'altitude_maxima' => $old_data['altitude_maxima'],
                 'total_distancia_percorrida' => $old_data['total_distancia_percorrida'],
@@ -97,9 +109,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
         $tipo_ocorrencia = htmlspecialchars($_POST['tipo_ocorrencia']);
         $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
         $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
+        
+        // ### CORREÇÃO 3: Usar variáveis para os novos dados da missão ###
+        $new_altitude = $logData['altitude_maxima'];
+        $new_distancia = $logData['total_distancia_percorrida'];
+        $new_tempo = $logData['total_tempo_voo'];
+        $new_decolagem = $logData['data_primeira_decolagem'];
+        $new_pouso = $logData['data_ultimo_pouso'];
 
         $stmt_update = $conn->prepare("UPDATE missoes SET aeronave_id=?, data_ocorrencia=?, tipo_ocorrencia=?, rgo_ocorrencia=?, dados_vitima=?, altitude_maxima=?, total_distancia_percorrida=?, total_tempo_voo=?, data_primeira_decolagem=?, data_ultimo_pouso=? WHERE id=?");
-        $stmt_update->bind_param("issssdidssi", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $logData['altitude_maxima'], $logData['total_distancia_percorrida'], $logData['total_tempo_voo'], $logData['data_primeira_decolagem'], $logData['data_ultimo_pouso'], $missao_id);
+        $stmt_update->bind_param("issssdidssi", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $new_altitude, $new_distancia, $new_tempo, $new_decolagem, $new_pouso, $missao_id);
         $stmt_update->execute();
         $stmt_update->close();
         
@@ -110,13 +129,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
         
         $stmt_pilotos_assoc = $conn->prepare("INSERT INTO missoes_pilotos (missao_id, piloto_id) VALUES (?, ?)");
         foreach ($pilotos_selecionados as $piloto_id) {
-            $stmt_pilotos_assoc->bind_param("ii", $missao_id, intval($piloto_id));
+            $pid = intval($piloto_id);
+            $stmt_pilotos_assoc->bind_param("ii", $missao_id, $pid);
             $stmt_pilotos_assoc->execute();
         }
         $stmt_pilotos_assoc->close();
 
         $stmt_add_back = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada + ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado + ? WHERE aeronave_id = ?");
-        $stmt_add_back->bind_param("ddi", $logData['total_distancia_percorrida'], $logData['total_tempo_voo'], $aeronave_id);
+        // Reutiliza as variáveis já criadas
+        $stmt_add_back->bind_param("ddi", $new_distancia, $new_tempo, $aeronave_id);
         $stmt_add_back->execute();
         $stmt_add_back->close();
 
@@ -261,4 +282,3 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 require_once 'includes/footer.php';
 ?>
-

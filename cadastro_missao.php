@@ -43,7 +43,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             
             $logData = $gpxProcessor->getAggregatedData();
-
             if ($logData === null) {
                 throw new Exception("Não foi possível processar os ficheiros GPX.");
             }
@@ -55,41 +54,77 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
             $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
 
+            // Atribui valores do log agregado a variáveis
+            $altitude_maxima = $logData['altitude_maxima'];
+            $total_distancia_percorrida = $logData['total_distancia_percorrida'];
+            $total_tempo_voo = $logData['total_tempo_voo'];
+            $data_primeira_decolagem = $logData['data_primeira_decolagem'];
+            $data_ultimo_pouso = $logData['data_ultimo_pouso'];
+
             $stmt_missao = $conn->prepare("INSERT INTO missoes (aeronave_id, data_ocorrencia, tipo_ocorrencia, rgo_ocorrencia, dados_vitima, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt_missao->bind_param("issssdidss", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $logData['altitude_maxima'], $logData['total_distancia_percorrida'], $logData['total_tempo_voo'], $logData['data_primeira_decolagem'], $logData['data_ultimo_pouso']);
+            $stmt_missao->bind_param("issssdidss", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso);
             $stmt_missao->execute();
             $missao_id = $conn->insert_id;
+            $stmt_missao->close();
 
             $stmt_pilotos_assoc = $conn->prepare("INSERT INTO missoes_pilotos (missao_id, piloto_id) VALUES (?, ?)");
             foreach ($pilotos_selecionados as $piloto_id) {
-                $stmt_pilotos_assoc->bind_param("ii", $missao_id, intval($piloto_id));
+                $pid = intval($piloto_id);
+                $stmt_pilotos_assoc->bind_param("ii", $missao_id, $pid);
                 $stmt_pilotos_assoc->execute();
             }
             $stmt_pilotos_assoc->close();
 
             $upload_dir = 'uploads/gpx/';
-            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            
+            // Prepara a inserção de ficheiros GPX
             $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            
+            // Prepara a inserção de coordenadas
+            $stmt_coords = $conn->prepare("INSERT INTO missao_coordenadas (gpx_file_id, latitude, longitude, altitude, timestamp_ponto) VALUES (?, ?, ?, ?, ?)");
+
             $individualFileData = $gpxProcessor->getIndividualFileData();
             foreach ($_FILES['gpx_files']['name'] as $key => $name) {
                 if ($_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
                     $tmp_name = $_FILES['gpx_files']['tmp_name'][$key];
-                    $file_name = $missao_id . '_' . uniqid() . '_' . basename($name);
-                    $file_path = $upload_dir . $file_name;
+                    $file_name_uniq = $missao_id . '_' . uniqid() . '_' . basename($name);
+                    $file_path = $upload_dir . $file_name_uniq;
+                    
                     if (move_uploaded_file($tmp_name, $file_path)) {
                         $file_log_data = $individualFileData[$key];
+                        
+                        $tempo_voo_individual = $file_log_data['tempo_voo'];
+                        $distancia_individual = $file_log_data['distancia_percorrida'];
+                        $altura_maxima_individual = $file_log_data['altura_maxima'];
                         $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
                         $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
-                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $file_log_data['tempo_voo'], $file_log_data['distancia_percorrida'], $file_log_data['altura_maxima'], $decolagem_str, $pouso_str);
+                        
+                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
                         $stmt_gpx->execute();
+                        $gpx_file_id = $conn->insert_id;
+
+                        // Insere todas as coordenadas para este ficheiro
+                        foreach ($file_log_data['trackPoints'] as $point) {
+                            $lat = $point['lat'];
+                            $lon = $point['lon'];
+                            $ele = $point['ele'];
+                            $time = $point['time']->format('Y-m-d H:i:s');
+                            $stmt_coords->bind_param("idds", $gpx_file_id, $lat, $lon, $ele, $time);
+                            $stmt_coords->execute();
+                        }
                     }
                 }
             }
             $stmt_gpx->close();
+            $stmt_coords->close();
             
             $stmt_logbook = $conn->prepare("INSERT INTO aeronaves_logbook (aeronave_id, distancia_total_acumulada, tempo_voo_total_acumulado) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE distancia_total_acumulada = distancia_total_acumulada + VALUES(distancia_total_acumulada), tempo_voo_total_acumulado = tempo_voo_total_acumulado + VALUES(tempo_voo_total_acumulado)");
-            $stmt_logbook->bind_param("idi", $aeronave_id, $logData['total_distancia_percorrida'], $logData['total_tempo_voo']);
+            $stmt_logbook->bind_param("idi", $aeronave_id, $total_distancia_percorrida, $total_tempo_voo);
             $stmt_logbook->execute();
+            $stmt_logbook->close();
 
             $conn->commit();
             $mensagem_status = "<div class='success-message-box'>Missão registrada com sucesso! A redirecionar...</div>";
