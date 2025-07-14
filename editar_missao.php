@@ -261,3 +261,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 require_once 'includes/footer.php';
 ?>
+
