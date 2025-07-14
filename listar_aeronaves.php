@@ -48,31 +48,33 @@ if ($isAdmin && isset($_GET['delete_id'])) {
 
 // 3. LÓGICA PARA LISTAR AS AERONAVES
 $aeronaves = [];
+$result_aeronaves = null;
 
 if ($isPiloto) {
-    $crbm_do_usuario_logado = '';
-    $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
-    $stmt_crbm->bind_param("i", $_SESSION['user_id']);
-    $stmt_crbm->execute();
-    $result_crbm = $stmt_crbm->get_result();
-    if ($result_crbm->num_rows > 0) {
-        $crbm_do_usuario_logado = $result_crbm->fetch_assoc()['crbm_piloto'];
+    // CORREÇÃO: Piloto agora vê apenas aeronaves da sua OBM, para consistência.
+    $obm_do_usuario_logado = '';
+    $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
+    $stmt_obm->bind_param("i", $_SESSION['user_id']);
+    $stmt_obm->execute();
+    $result_obm = $stmt_obm->get_result();
+    if ($result_obm->num_rows > 0) {
+        $obm_do_usuario_logado = $result_obm->fetch_assoc()['obm_piloto'];
     }
-    $stmt_crbm->close();
+    $stmt_obm->close();
 
-    if (!empty($crbm_do_usuario_logado)) {
-        $stmt_aeronaves = $conn->prepare("SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves WHERE crbm = ? ORDER BY prefixo ASC");
-        $stmt_aeronaves->bind_param("s", $crbm_do_usuario_logado);
+    if (!empty($obm_do_usuario_logado)) {
+        $stmt_aeronaves = $conn->prepare("SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves WHERE obm = ? ORDER BY prefixo ASC");
+        $stmt_aeronaves->bind_param("s", $obm_do_usuario_logado);
         $stmt_aeronaves->execute();
         $result_aeronaves = $stmt_aeronaves->get_result();
         $stmt_aeronaves->close();
     }
-} else {
+} else { // Admin vê todas
     $sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves ORDER BY prefixo ASC";
     $result_aeronaves = $conn->query($sql_aeronaves);
 }
 
-if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
+if ($result_aeronaves && $result_aeronaves->num_rows > 0) {
     while ($row = $result_aeronaves->fetch_assoc()) {
         $aeronaves[] = $row;
     }

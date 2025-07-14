@@ -4,36 +4,38 @@ require_once 'includes/header.php';
 
 // 2. LÓGICA ESPECÍFICA DA PÁGINA
 $controles = [];
+$result_controles = null;
 
 $sql_base = "SELECT c.id, c.fabricante, c.modelo, c.numero_serie, c.crbm, c.obm, c.status, c.homologacao_anatel, a.prefixo AS prefixo_aeronave 
              FROM controles c 
              LEFT JOIN aeronaves a ON c.aeronave_id = a.id";
 
 if ($isPiloto) {
-    $crbm_do_usuario_logado = '';
-    $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
-    $stmt_crbm->bind_param("i", $_SESSION['user_id']);
-    $stmt_crbm->execute();
-    $result_crbm = $stmt_crbm->get_result();
-    if ($result_crbm->num_rows > 0) {
-        $crbm_do_usuario_logado = $result_crbm->fetch_assoc()['crbm_piloto'];
+    // CORREÇÃO: Piloto agora vê apenas controles da sua OBM, para consistência.
+    $obm_do_usuario_logado = '';
+    $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
+    $stmt_obm->bind_param("i", $_SESSION['user_id']);
+    $stmt_obm->execute();
+    $result_obm = $stmt_obm->get_result();
+    if ($result_obm->num_rows > 0) {
+        $obm_do_usuario_logado = $result_obm->fetch_assoc()['obm_piloto'];
     }
-    $stmt_crbm->close();
+    $stmt_obm->close();
 
-    if (!empty($crbm_do_usuario_logado)) {
-        $sql_controles = $sql_base . " WHERE c.crbm = ? ORDER BY c.id DESC";
+    if (!empty($obm_do_usuario_logado)) {
+        $sql_controles = $sql_base . " WHERE c.obm = ? ORDER BY c.id DESC";
         $stmt_controles = $conn->prepare($sql_controles);
-        $stmt_controles->bind_param("s", $crbm_do_usuario_logado);
+        $stmt_controles->bind_param("s", $obm_do_usuario_logado);
         $stmt_controles->execute();
         $result_controles = $stmt_controles->get_result();
         $stmt_controles->close();
     }
-} else {
+} else { // Admin vê todos
     $sql_controles = $sql_base . " ORDER BY c.id DESC";
     $result_controles = $conn->query($sql_controles);
 }
 
-if (isset($result_controles) && $result_controles->num_rows > 0) {
+if ($result_controles && $result_controles->num_rows > 0) {
     while ($row = $result_controles->fetch_assoc()) {
         $controles[] = $row;
     }
@@ -79,7 +81,7 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
                             <td><?php echo htmlspecialchars($controle['id'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars(($controle['fabricante'] ?? 'N/A') . ' / ' . ($controle['modelo'] ?? 'N/A')); ?></td>
                             <td><?php echo htmlspecialchars($controle['numero_serie'] ?? 'N/A'); ?></td>
-                            <td><?php echo htmlspecialchars($controle['prefixo_aeronave'] ?? 'Nenhum'); ?></td>
+                            <td><?php echo htmlspecialchars($controle['prefixo_aeronave'] ?? 'Nenhum (Reserva)'); ?></td>
                             <td>
                                 <?php 
                                     $crbm_formatado = preg_replace('/(\d)(CRBM)/', '$1º $2', $controle['crbm'] ?? 'N/A');

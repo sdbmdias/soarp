@@ -32,13 +32,13 @@ if ($isAdmin) {
             // Determina a qual CRBM o registro pertence
             $crbm_do_registro = $row['aeronave_crbm'] ?? $row['controle_crbm'];
             if (empty($crbm_do_registro)) {
-                $crbm_do_registro = 'Sem Lotação';
+                $crbm_do_registro = 'Sem Lotação Definida';
             }
             $manutencoes_por_crbm[$crbm_do_registro][] = $row;
         }
     }
 
-} else { // Visão do Piloto (permanece a mesma)
+} else { // Visão do Piloto
     // 1. Busca a OBM do piloto logado
     $obm_do_piloto = '';
     $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
@@ -75,9 +75,9 @@ if ($isAdmin) {
 </style>
 
 <div class="main-content">
-    <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
         <h1>Histórico de Manutenções</h1>
-        <a href="cadastro_manutencao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px;">
+        <a href="cadastro_manutencao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color:#28a745; color:#fff;">
             <i class="fas fa-plus"></i> Registrar Nova Manutenção
         </a>
     </div>
@@ -108,8 +108,8 @@ if ($isAdmin) {
                                             if ($manutencao['equipamento_tipo'] == 'Aeronave') {
                                                 echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
                                             } else {
-                                                $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
-                                                echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
+                                                $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinc. a ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
+                                                echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn']) . ' ' . $vinculo;
                                             }
                                         ?>
                                     </td>
@@ -160,8 +160,8 @@ if ($isAdmin) {
                                         if ($manutencao['equipamento_tipo'] == 'Aeronave') {
                                             echo '<strong>Aeronave:</strong><br>' . htmlspecialchars($manutencao['aeronave_prefixo'] . ' - ' . $manutencao['aeronave_modelo']);
                                         } else {
-                                            $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinculado ao ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
-                                            echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn'] . ' - ' . $manutencao['controle_modelo']) . ' ' . $vinculo;
+                                            $vinculo = !empty($manutencao['controle_vinculado_a']) ? ' (Vinc. a ' . htmlspecialchars($manutencao['controle_vinculado_a']) . ')' : ' (Reserva)';
+                                            echo '<strong>Controle:</strong><br>S/N: ' . htmlspecialchars($manutencao['controle_sn']) . ' ' . $vinculo;
                                         }
                                     ?>
                                 </td>

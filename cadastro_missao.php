@@ -9,6 +9,7 @@ $aeronaves_disponiveis = [];
 $tipos_operacao = [];
 
 if ($isPiloto) {
+    // Se for piloto, busca o CRBM para filtrar as aeronaves
     $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
     $stmt_crbm->bind_param("i", $_SESSION['user_id']);
     $stmt_crbm->execute();
@@ -21,7 +22,7 @@ if ($isPiloto) {
     $stmt_aeronaves->bind_param("s", $crbm_do_piloto);
     $stmt_aeronaves->execute();
     $result_aeronaves = $stmt_aeronaves->get_result();
-} else {
+} else { // Admin vê todas as aeronaves ativas
     $sql_aeronaves = "SELECT id, prefixo, modelo, crbm FROM aeronaves WHERE status = 'ativo' ORDER BY prefixo ASC";
     $result_aeronaves = $conn->query($sql_aeronaves);
 }
@@ -37,25 +38,32 @@ if($result_operacoes) {
 // --- Lógica de submissão do formulário ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
-    if (isset($_FILES['gpx_files']) && count(array_filter($_FILES['gpx_files']['name'])) > 0 && isset($_POST['pilotos']) && !empty($_POST['pilotos'])) {
+    // Validações essenciais
+    if (isset($_FILES['gpx_files']) && count(array_filter($_FILES['gpx_files']['name'])) > 0 && isset($_POST['pilotos']) && !empty(array_filter($_POST['pilotos']))) {
         
         $conn->begin_transaction();
         try {
             $gpxProcessor = new GPXProcessor();
+            $uploaded_files_data = [];
             foreach ($_FILES['gpx_files']['tmp_name'] as $key => $tmp_name) {
                 if (!empty($tmp_name) && $_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
                     $gpxProcessor->load($tmp_name);
+                    $uploaded_files_data[] = [
+                        'name' => $_FILES['gpx_files']['name'][$key],
+                        'tmp_name' => $tmp_name
+                    ];
                 }
             }
             
             $logData = $gpxProcessor->getAggregatedData();
             if ($logData === null) {
-                throw new Exception("Não foi possível processar os ficheiros GPX.");
+                throw new Exception("Não foi possível processar os ficheiros GPX. Verifique o formato.");
             }
             
-            // Coleta dos dados do formulário
+            // Coleta e sanitização dos dados do formulário
             $aeronave_id = intval($_POST['aeronave_id']);
             $pilotos_selecionados = array_unique(array_filter($_POST['pilotos']));
+            // CORREÇÃO: Usando 'data' como o nome do campo
             $data = htmlspecialchars($_POST['data']);
             $descricao_operacao = htmlspecialchars($_POST['descricao_operacao']);
             $protocolo_sarpas = htmlspecialchars($_POST['protocolo_sarpas']);
@@ -68,29 +76,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $forma_acionamento = htmlspecialchars($_POST['forma_acionamento']);
             $forma_acionamento_outro = ($forma_acionamento == 'Outro') ? htmlspecialchars($_POST['forma_acionamento_outro']) : NULL;
 
-            $altitude_maxima = $logData['altitude_maxima'];
-            $total_distancia_percorrida = $logData['total_distancia_percorrida'];
-            $total_tempo_voo = $logData['total_tempo_voo'];
-            $data_primeira_decolagem = $logData['data_primeira_decolagem'];
-            $data_ultimo_pouso = $logData['data_ultimo_pouso'];
-
+            // Inserção na tabela de missões
+            // CORREÇÃO: Usando a coluna 'data'
             $stmt_missao = $conn->prepare(
                 "INSERT INTO missoes (aeronave_id, data, descricao_operacao, protocolo_sarpas, rgo_ocorrencia, dados_vitima, link_fotos_videos, descricao_ocorrido, contato_ats, contato_ats_outro, forma_acionamento, forma_acionamento_outro, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt_missao->bind_param("isssssssssssddiss", 
                 $aeronave_id, $data, $descricao_operacao, $protocolo_sarpas, $rgo_ocorrencia, $dados_vitima, $link_fotos_videos, $descricao_ocorrido, $contato_ats, $contato_ats_outro, $forma_acionamento, $forma_acionamento_outro,
-                $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso
+                $logData['altitude_maxima'], $logData['total_distancia_percorrida'], $logData['total_tempo_voo'], $logData['data_primeira_decolagem'], $logData['data_ultimo_pouso']
             );
             
-            $stmt_missao->execute();
-            $missao_id = $conn->insert_id;
-            if ($missao_id == 0) {
-                throw new Exception("Falha ao criar a missão principal. Erro: " . $conn->error);
+            if (!$stmt_missao->execute()) {
+                 throw new Exception("Falha ao criar a missão principal. Erro: " . $conn->error);
             }
+            $missao_id = $conn->insert_id;
             $stmt_missao->close();
 
-            // Salvar pilotos
+            // Associações de pilotos
             $stmt_pilotos_assoc = $conn->prepare("INSERT INTO missoes_pilotos (missao_id, piloto_id) VALUES (?, ?)");
             foreach ($pilotos_selecionados as $piloto_id) {
                 $pid = intval($piloto_id);
@@ -100,38 +103,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_pilotos_assoc->close();
             
             // Salvar logs GPX e coordenadas
-            $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt_coords = $conn->prepare("INSERT INTO missao_coordenadas (gpx_file_id, latitude, longitude, altitude, timestamp_ponto) VALUES (?, ?, ?, ?, ?)");
 
             $individualFileData = $gpxProcessor->getIndividualFileData();
-            foreach ($_FILES['gpx_files']['name'] as $key => $name) {
-                if ($_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
-                    
-                    $file_log_data = $individualFileData[$key];
-                    $file_path_db = ''; 
-
-                    $tempo_voo_individual = $file_log_data['tempo_voo'];
-                    $distancia_individual = $file_log_data['distancia_percorrida'];
-                    $altura_maxima_individual = $file_log_data['altura_maxima'];
-                    $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
-                    $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
-                    
-                    $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path_db, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
-                    $stmt_gpx->execute();
-                    $gpx_file_id = $conn->insert_id;
-                    if ($gpx_file_id == 0) {
-                        throw new Exception("Falha ao criar o registo do ficheiro GPX.");
-                    }
-
-                    foreach ($file_log_data['trackPoints'] as $point) {
-                        $lat = $point['lat'];
-                        $lon = $point['lon'];
-                        $ele = $point['ele'];
-                        $time = $point['time']->format('Y-m-d H:i:s');
-                        
-                        $stmt_coords->bind_param("iddds", $gpx_file_id, $lat, $lon, $ele, $time);
-                        $stmt_coords->execute();
-                    }
+            foreach ($individualFileData as $key => $file_log_data) {
+                
+                $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
+                $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
+                
+                $stmt_gpx->bind_param("isiddss", $missao_id, $uploaded_files_data[$key]['name'], $file_log_data['tempo_voo'], $file_log_data['distancia_percorrida'], $file_log_data['altura_maxima'], $decolagem_str, $pouso_str);
+                $stmt_gpx->execute();
+                $gpx_file_id = $conn->insert_id;
+                
+                foreach ($file_log_data['trackPoints'] as $point) {
+                    $time = $point['time']->format('Y-m-d H:i:s');
+                    $stmt_coords->bind_param("iddds", $gpx_file_id, $point['lat'], $point['lon'], $point['ele'], $time);
+                    $stmt_coords->execute();
                 }
             }
             $stmt_gpx->close();
@@ -139,7 +127,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             // Atualizar logbook da aeronave
             $stmt_logbook = $conn->prepare("INSERT INTO aeronaves_logbook (aeronave_id, distancia_total_acumulada, tempo_voo_total_acumulado) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE distancia_total_acumulada = distancia_total_acumulada + VALUES(distancia_total_acumulada), tempo_voo_total_acumulado = tempo_voo_total_acumulado + VALUES(tempo_voo_total_acumulado)");
-            $stmt_logbook->bind_param("idi", $aeronave_id, $total_distancia_percorrida, $total_tempo_voo);
+            $stmt_logbook->bind_param("idi", $aeronave_id, $logData['total_distancia_percorrida'], $logData['total_tempo_voo']);
             $stmt_logbook->execute();
             $stmt_logbook->close();
 
@@ -246,7 +234,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div id="pilots-container">
                             <small>Selecione uma aeronave para carregar a lista de pilotos.</small>
                         </div>
-                        <button type="button" id="add-pilot-btn" class="button-secondary" style="margin-top: 10px; display: none;">Adicionar outro Piloto</button>
+                        <button type="button" id="add-pilot-btn" class="button-secondary" style="margin-top: 10px; display: none; background-color: #5a6268; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Adicionar outro Piloto</button>
                     </div>
                 </div>
             </fieldset>
@@ -255,7 +243,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <legend>3. Dados Complementares</legend>
                 <div class="form-grid">
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label for="link_fotos_videos">Link do Upload das Fotos/Vídeos:</label>
+                        <label for="link_fotos_videos">Link do Upload das Fotos/Vídeos (Opcional):</label>
                         <input type="url" id="link_fotos_videos" name="link_fotos_videos" placeholder="https://exemplo.com/fotos_da_missao">
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
@@ -376,8 +364,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('missaoForm');
     form.addEventListener('submit', function(e) {
         const selectedPilots = Array.from(document.querySelectorAll('select[name="pilotos[]"]')).map(s => s.value);
-        const uniquePilots = new Set(selectedPilots);
+        
+        if (selectedPilots.some(p => p === '')) {
+             e.preventDefault();
+             alert('Erro: Por favor, selecione um piloto em todos os campos ou remova os campos desnecessários.');
+             return;
+        }
 
+        const uniquePilots = new Set(selectedPilots);
         if (selectedPilots.length > uniquePilots.size) {
             e.preventDefault();
             alert('Erro: Por favor, não selecione o mesmo piloto mais de uma vez.');

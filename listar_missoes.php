@@ -18,43 +18,32 @@ if ($isAdmin && isset($_GET['delete_id'])) {
         $stmt_get_data->close();
 
         if ($missao_data) {
-            $gpx_files_ids = [];
-            $stmt_get_files = $conn->prepare("SELECT id, file_path FROM missoes_gpx_files WHERE missao_id = ?");
-            $stmt_get_files->bind_param("i", $missao_id_para_excluir);
-            $stmt_get_files->execute();
-            $result_files = $stmt_get_files->get_result();
-            while ($file = $result_files->fetch_assoc()) {
-                if (file_exists($file['file_path'])) {
-                    unlink($file['file_path']);
-                }
-                $gpx_files_ids[] = $file['id'];
-            }
-            $stmt_get_files->close();
+            
+            // Excluir coordenadas primeiro, que dependem dos gpx_files
+            $stmt_delete_coords = $conn->prepare("DELETE FROM missao_coordenadas WHERE gpx_file_id IN (SELECT id FROM missoes_gpx_files WHERE missao_id = ?)");
+            $stmt_delete_coords->bind_param("i", $missao_id_para_excluir);
+            $stmt_delete_coords->execute();
+            $stmt_delete_coords->close();
 
-            if (!empty($gpx_files_ids)) {
-                $ids_placeholder = implode(',', array_fill(0, count($gpx_files_ids), '?'));
-                $stmt_delete_coords = $conn->prepare("DELETE FROM missao_coordenadas WHERE gpx_file_id IN ($ids_placeholder)");
-                $types = str_repeat('i', count($gpx_files_ids));
-                $stmt_delete_coords->bind_param($types, ...$gpx_files_ids);
-                $stmt_delete_coords->execute();
-                $stmt_delete_coords->close();
-            }
-
+            // Excluir ficheiros GPX
             $stmt_delete_gpx = $conn->prepare("DELETE FROM missoes_gpx_files WHERE missao_id = ?");
             $stmt_delete_gpx->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_gpx->execute();
             $stmt_delete_gpx->close();
 
+            // Excluir associações de pilotos
             $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
             $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_pilots->execute();
             $stmt_delete_pilots->close();
-
-            $stmt_update_logbook = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada - ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado - ? WHERE aeronave_id = ?");
+            
+            // Reverter o logbook da aeronave
+            $stmt_update_logbook = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = GREATEST(0, distancia_total_acumulada - ?), tempo_voo_total_acumulado = GREATEST(0, tempo_voo_total_acumulado - ?) WHERE aeronave_id = ?");
             $stmt_update_logbook->bind_param("ddi", $missao_data['total_distancia_percorrida'], $missao_data['total_tempo_voo'], $missao_data['aeronave_id']);
             $stmt_update_logbook->execute();
             $stmt_update_logbook->close();
 
+            // Finalmente, excluir a missão
             $stmt_delete_mission = $conn->prepare("DELETE FROM missoes WHERE id = ?");
             $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_mission->execute();
@@ -156,6 +145,7 @@ function formatarTempoVoo($segundos) {
                             <td class="action-buttons">
                                 <a href="ver_missao.php?id=<?php echo $missao['id']; ?>" class="edit-btn">Ver Detalhes</a>
                                 <?php if ($isAdmin): ?>
+                                    <a href="editar_missao.php?id=<?php echo $missao['id']; ?>" class="edit-btn" style="background-color: #ffc107; color: #212529;">Editar</a>
                                     <a href="listar_missoes.php?delete_id=<?php echo $missao['id']; ?>" class="edit-btn" style="background-color: #dc3545; color: #fff;" onclick="return confirm('Tem a certeza que deseja excluir permanentemente a missão (RGO: <?php echo htmlspecialchars($missao['rgo_ocorrencia']); ?>) e todos os seus dados associados? Esta ação é irreversível.');">Excluir</a>
                                 <?php endif; ?>
                             </td>

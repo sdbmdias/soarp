@@ -12,6 +12,8 @@ $mensagem_status = "";
 $missao_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $missao_data = null;
 $pilotos_associados_ids = [];
+$tipos_operacao = [];
+
 
 if ($missao_id <= 0) {
     header("Location: listar_missoes.php");
@@ -22,7 +24,8 @@ if ($missao_id <= 0) {
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($_POST['pilotos'])) {
     $conn->begin_transaction();
     try {
-        $stmt_old_data = $conn->prepare("SELECT aeronave_id, total_distancia_percorrida, total_tempo_voo, altitude_maxima, data_primeira_decolagem, data_ultimo_pouso FROM missoes WHERE id = ?");
+        // 1. Busca os dados antigos da missão para reverter o logbook
+        $stmt_old_data = $conn->prepare("SELECT aeronave_id, total_distancia_percorrida, total_tempo_voo FROM missoes WHERE id = ?");
         $stmt_old_data->bind_param("i", $missao_id);
         $stmt_old_data->execute();
         $old_data_result = $stmt_old_data->get_result();
@@ -33,33 +36,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
             throw new Exception("Missão original não encontrada para atualização.");
         }
         
-        // ### CORREÇÃO 1: Usar variáveis para os dados antigos ###
+        $old_aeronave_id = $old_data['aeronave_id'];
         $old_distancia = $old_data['total_distancia_percorrida'];
         $old_tempo = $old_data['total_tempo_voo'];
-        $old_aeronave_id = $old_data['aeronave_id'];
 
-        $stmt_subtract = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada - ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado - ? WHERE aeronave_id = ?");
+        // 2. Subtrai os valores antigos do logbook da aeronave antiga
+        $stmt_subtract = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = GREATEST(0, distancia_total_acumulada - ?), tempo_voo_total_acumulado = GREATEST(0, tempo_voo_total_acumulado - ?) WHERE aeronave_id = ?");
         $stmt_subtract->bind_param("ddi", $old_distancia, $old_tempo, $old_aeronave_id);
         $stmt_subtract->execute();
         $stmt_subtract->close();
+        
+        // Coleta dos dados do formulário
+        $aeronave_id = intval($_POST['aeronave_id']);
+        $pilotos_selecionados = array_unique(array_filter($_POST['pilotos']));
+        $data = htmlspecialchars($_POST['data']); // CORREÇÃO
+        $descricao_operacao = htmlspecialchars($_POST['descricao_operacao']);
+        $protocolo_sarpas = htmlspecialchars($_POST['protocolo_sarpas']);
+        $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
+        $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
+        $link_fotos_videos = htmlspecialchars($_POST['link_fotos_videos']);
+        $descricao_ocorrido = htmlspecialchars($_POST['descricao_ocorrido']);
+        $contato_ats = htmlspecialchars($_POST['contato_ats']);
+        $contato_ats_outro = ($contato_ats == 'Outro') ? htmlspecialchars($_POST['contato_ats_outro']) : NULL;
+        $forma_acionamento = htmlspecialchars($_POST['forma_acionamento']);
+        $forma_acionamento_outro = ($forma_acionamento == 'Outro') ? htmlspecialchars($_POST['forma_acionamento_outro']) : NULL;
+        
+        // Carrega os dados antigos para o caso de não haver upload de novos GPX
+        $stmt_current_gpx_data = $conn->prepare("SELECT altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso FROM missoes WHERE id = ?");
+        $stmt_current_gpx_data->bind_param("i", $missao_id);
+        $stmt_current_gpx_data->execute();
+        $current_gpx_data = $stmt_current_gpx_data->get_result()->fetch_assoc();
+        $stmt_current_gpx_data->close();
+        
+        $new_altitude = $current_gpx_data['altitude_maxima'];
+        $new_distancia = $current_gpx_data['total_distancia_percorrida'];
+        $new_tempo = $current_gpx_data['total_tempo_voo'];
+        $new_decolagem = $current_gpx_data['data_primeira_decolagem'];
+        $new_pouso = $current_gpx_data['data_ultimo_pouso'];
 
-        $logData = [];
-
+        // Se novos arquivos GPX foram enviados, processa-os e sobrescreve os dados
         if (isset($_FILES['gpx_files']) && count(array_filter($_FILES['gpx_files']['name'])) > 0) {
-            $stmt_get_files = $conn->prepare("SELECT file_path FROM missoes_gpx_files WHERE missao_id = ?");
-            $stmt_get_files->bind_param("i", $missao_id);
-            $stmt_get_files->execute();
-            $result_files = $stmt_get_files->get_result();
-            while ($file = $result_files->fetch_assoc()) {
-                if (file_exists($file['file_path'])) unlink($file['file_path']);
-            }
-            $stmt_get_files->close();
-
-            $stmt_delete_gpx = $conn->prepare("DELETE FROM missoes_gpx_files WHERE missao_id = ?");
-            $stmt_delete_gpx->bind_param("i", $missao_id);
-            $stmt_delete_gpx->execute();
-            $stmt_delete_gpx->close();
-
+            
             $gpxProcessor = new GPXProcessor();
             foreach ($_FILES['gpx_files']['tmp_name'] as $key => $tmp_name) {
                 if (!empty($tmp_name) && $_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
@@ -69,59 +86,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
             $logData = $gpxProcessor->getAggregatedData();
             if ($logData === null) throw new Exception("Não foi possível processar os novos ficheiros GPX.");
             
-            $upload_dir = 'uploads/gpx/';
-            $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $individualFileData = $gpxProcessor->getIndividualFileData();
-            foreach ($_FILES['gpx_files']['name'] as $key => $name) {
-                if ($_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
-                    $tmp_name = $_FILES['gpx_files']['tmp_name'][$key];
-                    $file_name = $missao_id . '_' . uniqid() . '_' . basename($name);
-                    $file_path = $upload_dir . $file_name;
-                    if (move_uploaded_file($tmp_name, $file_path)) {
-                        $file_log_data = $individualFileData[$key];
-                        // ### CORREÇÃO 2: Usar variáveis para os dados individuais do GPX ###
-                        $tempo_voo_individual = $file_log_data['tempo_voo'];
-                        $distancia_individual = $file_log_data['distancia_percorrida'];
-                        $altura_maxima_individual = $file_log_data['altura_maxima'];
-                        $decolagem_str = $file_log_data['data_decolagem']->format('Y-m-d H:i:s');
-                        $pouso_str = $file_log_data['data_pouso']->format('Y-m-d H:i:s');
-                        
-                        $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
-                        $stmt_gpx->execute();
-                    }
-                }
-            }
-            $stmt_gpx->close();
-        } else {
-            // Se não houver novos ficheiros, usar os dados antigos para a atualização
-            $logData = [
-                'altitude_maxima' => $old_data['altitude_maxima'],
-                'total_distancia_percorrida' => $old_data['total_distancia_percorrida'],
-                'total_tempo_voo' => $old_data['total_tempo_voo'],
-                'data_primeira_decolagem' => $old_data['data_primeira_decolagem'],
-                'data_ultimo_pouso' => $old_data['data_ultimo_pouso']
-            ];
+            // Atualiza as variáveis com os novos dados do GPX
+            $new_altitude = $logData['altitude_maxima'];
+            $new_distancia = $logData['total_distancia_percorrida'];
+            $new_tempo = $logData['total_tempo_voo'];
+            $new_decolagem = $logData['data_primeira_decolagem'];
+            $new_pouso = $logData['data_ultimo_pouso'];
         }
 
-        $aeronave_id = intval($_POST['aeronave_id']);
-        $pilotos_selecionados = $_POST['pilotos'];
-        $data_ocorrencia = htmlspecialchars($_POST['data_ocorrencia']);
-        $tipo_ocorrencia = htmlspecialchars($_POST['tipo_ocorrencia']);
-        $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
-        $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
-        
-        // ### CORREÇÃO 3: Usar variáveis para os novos dados da missão ###
-        $new_altitude = $logData['altitude_maxima'];
-        $new_distancia = $logData['total_distancia_percorrida'];
-        $new_tempo = $logData['total_tempo_voo'];
-        $new_decolagem = $logData['data_primeira_decolagem'];
-        $new_pouso = $logData['data_ultimo_pouso'];
-
-        $stmt_update = $conn->prepare("UPDATE missoes SET aeronave_id=?, data_ocorrencia=?, tipo_ocorrencia=?, rgo_ocorrencia=?, dados_vitima=?, altitude_maxima=?, total_distancia_percorrida=?, total_tempo_voo=?, data_primeira_decolagem=?, data_ultimo_pouso=? WHERE id=?");
-        $stmt_update->bind_param("issssdidssi", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $new_altitude, $new_distancia, $new_tempo, $new_decolagem, $new_pouso, $missao_id);
+        // 5. Atualiza a missão com todos os dados 
+        $stmt_update = $conn->prepare("UPDATE missoes SET 
+            aeronave_id=?, data=?, descricao_operacao=?, protocolo_sarpas=?, rgo_ocorrencia=?, dados_vitima=?, 
+            link_fotos_videos=?, descricao_ocorrido=?, contato_ats=?, contato_ats_outro=?, forma_acionamento=?, forma_acionamento_outro=?,
+            altitude_maxima=?, total_distancia_percorrida=?, total_tempo_voo=?, data_primeira_decolagem=?, data_ultimo_pouso=?
+            WHERE id=?");
+        $stmt_update->bind_param("isssssssssssdssssi", 
+            $aeronave_id, $data, $descricao_operacao, $protocolo_sarpas, $rgo_ocorrencia, $dados_vitima, 
+            $link_fotos_videos, $descricao_ocorrido, $contato_ats, $contato_ats_outro, $forma_acionamento, $forma_acionamento_outro,
+            $new_altitude, $new_distancia, $new_tempo, $new_decolagem, $new_pouso,
+            $missao_id
+        );
         $stmt_update->execute();
         $stmt_update->close();
         
+        // 6. Atualiza os pilotos associados
         $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
         $stmt_delete_pilots->bind_param("i", $missao_id);
         $stmt_delete_pilots->execute();
@@ -135,14 +123,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
         }
         $stmt_pilotos_assoc->close();
 
-        $stmt_add_back = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada + ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado + ? WHERE aeronave_id = ?");
-        // Reutiliza as variáveis já criadas
-        $stmt_add_back->bind_param("ddi", $new_distancia, $new_tempo, $aeronave_id);
+        // 7. Adiciona os novos valores ao logbook da nova aeronave
+        $stmt_add_back = $conn->prepare("INSERT INTO aeronaves_logbook (aeronave_id, distancia_total_acumulada, tempo_voo_total_acumulado) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE distancia_total_acumulada = distancia_total_acumulada + VALUES(distancia_total_acumulada), tempo_voo_total_acumulado = tempo_voo_total_acumulado + VALUES(tempo_voo_total_acumulado)");
+        $stmt_add_back->bind_param("idi", $aeronave_id, $new_distancia, $new_tempo);
         $stmt_add_back->execute();
         $stmt_add_back->close();
 
         $conn->commit();
-        $mensagem_status = "<div class='success-message-box'>Missão atualizada com sucesso! A redirecionar...</div>";
+        $mensagem_status = "<div class='success-message-box'>Missão atualizada com sucesso! Redirecionando...</div>";
+        echo "<script>setTimeout(function() { window.location.href = 'ver_missao.php?id=$missao_id'; }, 2000);</script>";
+
 
     } catch (Exception $e) {
         $conn->rollback();
@@ -150,7 +140,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($
     }
 }
 
-// CARREGAR DADOS DA MISSÃO PARA PREENCHER O FORMULÁRIO
+// CARREGAR DADOS DA MISSÃO E DEMAIS SELECTS PARA PREENCHER O FORMULÁRIO
 $stmt_load = $conn->prepare("SELECT * FROM missoes WHERE id = ?");
 $stmt_load->bind_param("i", $missao_id);
 $stmt_load->execute();
@@ -171,20 +161,58 @@ if ($result_load->num_rows === 1) {
 }
 $stmt_load->close();
 
-$aeronaves_disponiveis = $conn->query("SELECT id, prefixo, modelo FROM aeronaves ORDER BY prefixo ASC")->fetch_all(MYSQLI_ASSOC);
+$aeronaves_disponiveis = $conn->query("SELECT id, prefixo, modelo, crbm FROM aeronaves ORDER BY prefixo ASC")->fetch_all(MYSQLI_ASSOC);
 $pilotos_disponiveis = $conn->query("SELECT id, posto_graduacao, nome_completo FROM pilotos ORDER BY nome_completo ASC")->fetch_all(MYSQLI_ASSOC);
+$result_operacoes = $conn->query("SELECT id, nome FROM tipos_operacao ORDER BY nome ASC");
+if($result_operacoes) {
+    while($row = $result_operacoes->fetch_assoc()) { $tipos_operacao[] = $row; }
+}
+
 ?>
 
 <div class="main-content">
-    <h1>Editar Missão <?php echo htmlspecialchars(!empty($missao_data['rgo_ocorrencia']) ? $missao_data['rgo_ocorrencia'] : '#' . $missao_id); ?></h1>
+    <h1>Editar Missão <?php echo htmlspecialchars(!empty($missao_data['rgo_ocorrencia']) ? 'RGO ' . $missao_data['rgo_ocorrencia'] : '#' . $missao_id); ?></h1>
     <?php echo $mensagem_status; ?>
 
     <?php if ($missao_data): ?>
     <div class="form-container">
         <form id="editMissaoForm" action="editar_missao.php?id=<?php echo $missao_id; ?>" method="POST" enctype="multipart/form-data">
+            
             <fieldset>
-                <legend>1. Detalhes da Missão</legend>
+                <legend>1. Dados da Operação</legend>
                 <div class="form-grid">
+                    <div class="form-group">
+                        <label for="data">Data:</label>
+                        <input type="date" id="data" name="data" value="<?php echo htmlspecialchars($missao_data['data']); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="descricao_operacao">Descrição da Operação:</label>
+                        <select id="descricao_operacao" name="descricao_operacao" required>
+                             <?php foreach($tipos_operacao as $tipo): ?>
+                                <option value="<?php echo htmlspecialchars($tipo['nome']); ?>" <?php echo ($missao_data['descricao_operacao'] == $tipo['nome']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($tipo['nome']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                     <div class="form-group">
+                        <label for="rgo_ocorrencia">Nº do RGO:</label>
+                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" value="<?php echo htmlspecialchars($missao_data['rgo_ocorrencia']); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="protocolo_sarpas">Protocolo SARPAS:</label>
+                        <input type="text" id="protocolo_sarpas" name="protocolo_sarpas" value="<?php echo htmlspecialchars($missao_data['protocolo_sarpas']); ?>" required>
+                    </div>
+                </div>
+                 <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="descricao_ocorrido">Descreva o Ocorrido:</label>
+                    <textarea id="descricao_ocorrido" name="descricao_ocorrido" rows="4" required><?php echo htmlspecialchars($missao_data['descricao_ocorrido']); ?></textarea>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>2. Equipamentos e Pessoal</legend>
+                 <div class="form-grid">
                     <div class="form-group">
                         <label for="aeronave_id">Aeronave (HAWK):</label>
                         <select id="aeronave_id" name="aeronave_id" required>
@@ -206,17 +234,15 @@ $pilotos_disponiveis = $conn->query("SELECT id, posto_graduacao, nome_completo F
                         </select>
                         <small>Para selecionar múltiplos, segure Ctrl (ou Cmd no Mac).</small>
                     </div>
-                    <div class="form-group">
-                        <label for="data_ocorrencia">Data da Ocorrência:</label>
-                        <input type="date" id="data_ocorrencia" name="data_ocorrencia" value="<?php echo htmlspecialchars($missao_data['data_ocorrencia']); ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="tipo_ocorrencia">Tipo da Ocorrência:</label>
-                        <input type="text" id="tipo_ocorrencia" name="tipo_ocorrencia" value="<?php echo htmlspecialchars($missao_data['tipo_ocorrencia']); ?>" required>
-                    </div>
-                     <div class="form-group">
-                        <label for="rgo_ocorrencia">Nº do RGO:</label>
-                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" value="<?php echo htmlspecialchars($missao_data['rgo_ocorrencia']); ?>">
+                </div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>3. Dados Complementares</legend>
+                 <div class="form-grid">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="link_fotos_videos">Link das Fotos/Vídeos:</label>
+                        <input type="url" id="link_fotos_videos" name="link_fotos_videos" value="<?php echo htmlspecialchars($missao_data['link_fotos_videos']); ?>">
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label for="dados_vitima">Dados da Vítima:</label>
@@ -226,7 +252,7 @@ $pilotos_disponiveis = $conn->query("SELECT id, posto_graduacao, nome_completo F
             </fieldset>
 
             <fieldset>
-                <legend>2. Ficheiros de Log de Voo (GPX)</legend>
+                <legend>4. Ficheiros de Log de Voo (GPX)</legend>
                 <div class="form-group">
                     <label for="gpx_files">Substituir Ficheiros GPX (opcional):</label>
                     <input type="file" id="gpx_files" name="gpx_files[]" accept=".gpx" multiple>
@@ -269,13 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
             fileListDiv.appendChild(list);
         }
     });
-
-    const successMessage = document.querySelector('.success-message-box');
-    if (successMessage) {
-        setTimeout(function() {
-            window.location.href = 'listar_missoes.php';
-        }, 2000);
-    }
 });
 </script>
 

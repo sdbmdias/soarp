@@ -23,8 +23,9 @@ if ($result_logbook_aeronave) {
     }
 }
 
-// ### NOVA LÓGICA: BUSCAR DADOS DO LOGBOOK POR PILOTO ###
+// ### LÓGICA CORRIGIDA: ATRIBUI O TEMPO E DISTÂNCIA TOTAIS A CADA PILOTO ###
 $logbook_pilotos = [];
+// A consulta agora simplesmente soma os totais da missão para cada piloto associado.
 $sql_logbook_pilotos = "
     SELECT 
         p.posto_graduacao,
@@ -135,7 +136,7 @@ function formatarDistancia($metros) {
 
     <div class="table-container">
         <h2><i class="fas fa-users"></i> Logbook Geral por Piloto</h2>
-        <p>Este relatório apresenta o total de distância e tempo de voo acumulado para cada piloto em todas as missões participadas.</p>
+        <p>Este relatório apresenta o total de distância e tempo de voo acumulado para cada piloto. O tempo total da missão é creditado integralmente a todos os participantes.</p>
         
         <table class="data-table" style="margin-top: 20px;">
             <thead>

@@ -130,6 +130,37 @@ function formatarDistancia($metros) {
     .detail-item strong { display: block; color: #555; margin-bottom: 5px; font-size: 0.9em; }
     .detail-item p, .detail-item ul { margin: 0; padding: 0; color: #333; font-size: 1.1em; }
     .detail-item ul { list-style-position: inside; }
+    
+    /* Estilos da Legenda do Mapa */
+    #map-legend {
+        position: absolute;
+        top: 10px;
+        left: 10px; /* CORREÇÃO: Movido para a esquerda */
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 1;
+    }
+    #map-legend h4 {
+        margin: 0 0 5px 0;
+        text-align: center;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    .legend-key {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+        border-radius: 3px;
+        border: 1px solid rgba(0,0,0,0.2);
+    }
 </style>
 
 <div class="main-content">
@@ -142,7 +173,10 @@ function formatarDistancia($metros) {
             
             <fieldset class="details-fieldset">
                 <legend>Mapa da Trajetória</legend>
-                <div id='map' style='width: 100%; height: 450px; border-radius: 5px;'></div>
+                <div id='map-container' style='position: relative;'>
+                    <div id='map' style='width: 100%; height: 450px; border-radius: 5px;'></div>
+                    <div id='map-legend' style="display: none;"><h4>Legenda de Voos</h4></div>
+                </div>
             </fieldset>
 
             <fieldset class="details-fieldset">
@@ -249,7 +283,7 @@ function formatarDistancia($metros) {
                     <div class="detail-item"><strong>Primeira Decolagem:</strong><p><?php echo date("d/m/Y H:i", strtotime($missao_details['data_primeira_decolagem'])); ?></p></div>
                     <div class="detail-item"><strong>Último Pouso:</strong><p><?php echo date("d/m/Y H:i", strtotime($missao_details['data_ultimo_pouso'])); ?></p></div>
                     <div class="detail-item"><strong>Tempo Total de Voo:</strong><p><?php echo formatarTempoVooCompleto($missao_details['total_tempo_voo']); ?></p></div>
-                    <div class="detail-item"><strong>Distância Total Percorrida:</strong><p><?php echo formatarDistancia($missao_details['total_distancia_percorrida']); ?> m</p></div>
+                    <div class="detail-item"><strong>Distância Total Percorrida:</strong><p><?php echo formatarDistancia($missao_details['total_distancia_percorrida']); ?></p></div>
                     <div class="detail-item" style="grid-column: 1 / -1;"><strong>Altura Máxima Atingida na Missão:</strong><p><?php echo round($missao_details['altitude_maxima'], 2); ?> m</p></div>
                  </div>
             </fieldset>
@@ -278,14 +312,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         map.addControl(new mapboxgl.NavigationControl());
-
+        
+        const legend = document.getElementById('map-legend');
         const bounds = new mapboxgl.LngLatBounds();
-        const colors = ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f', '#337ab7'];
+        // CORREÇÃO: Paleta de cores expandida para evitar repetições
+        const colors = [
+            '#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#A133FF', '#33FFA1', 
+            '#FFC300', '#DAF7A6', '#C70039', '#900C3F', '#581845', '#FF8C00',
+            '#00FFFF', '#FF00FF', '#7CFC00', '#8A2BE2', '#00BFFF', '#ADFF2F'
+        ];
 
         map.on('load', () => {
+            // Mostra a legenda apenas se houver trajetórias
+            legend.style.display = 'block';
+
             todasAsTrajetorias.forEach((trajetoria, index) => {
                 if (trajetoria.length < 2) return;
 
+                const color = colors[index % colors.length];
                 const sourceId = `route-${index}`;
                 map.addSource(sourceId, {
                     'type': 'geojson',
@@ -295,22 +339,36 @@ document.addEventListener('DOMContentLoaded', function () {
                 map.addLayer({
                     'id': `line-${index}`, 'type': 'line', 'source': sourceId,
                     'layout': { 'line-join': 'round', 'line-cap': 'round' },
-                    'paint': {'line-color': colors[index % colors.length], 'line-width': 4, 'line-opacity': 0.8}
+                    'paint': {'line-color': color, 'line-width': 4, 'line-opacity': 0.85}
                 });
                 
+                // Adicionar item à legenda
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                const legendKey = document.createElement('span');
+                legendKey.className = 'legend-key';
+                legendKey.style.backgroundColor = color;
+                const legendLabel = document.createTextNode(` Voo ${index + 1}`);
+                legendItem.appendChild(legendKey);
+                legendItem.appendChild(legendLabel);
+                legend.appendChild(legendItem);
+
+                // Adicionar marcadores de início e fim
                 new mapboxgl.Marker({ color: '#28a745' }).setLngLat(trajetoria[0]).setPopup(new mapboxgl.Popup().setText(`Início do Voo ${index + 1}`)).addTo(map);
                 new mapboxgl.Marker({ color: '#dc3545' }).setLngLat(trajetoria[trajetoria.length - 1]).setPopup(new mapboxgl.Popup().setText(`Fim do Voo ${index + 1}`)).addTo(map);
 
+                // Estender os limites do mapa para incluir a trajetória
                 trajetoria.forEach(coord => bounds.extend(coord));
             });
             
             if (!bounds.isEmpty()) {
-                map.fitBounds(bounds, { padding: { top: 50, bottom: 50, left: 50, right: 50 }});
+                map.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 60, right: 60 }});
             }
         });
 
     } else if(document.getElementById('map')) {
         document.getElementById('map').innerHTML = '<p style="text-align:center; padding: 20px;">Não há dados de trajetória para exibir no mapa.</p>';
+        document.getElementById('map-legend').style.display = 'none';
     }
 });
 </script>

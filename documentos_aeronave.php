@@ -6,7 +6,7 @@ require_once 'includes/header.php';
 $mensagem_status = "";
 $aeronave_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $aeronave_details = null;
-$documentos_associados = [];
+$documentos_encontrados = [];
 
 if ($aeronave_id <= 0) {
     header("Location: checklist.php");
@@ -46,6 +46,7 @@ if ($isPiloto) {
 
 // --- LÓGICA DE MODIFICAÇÃO (APENAS ADMIN) ---
 if ($isAdmin) {
+    // (A lógica de UPLOAD e DESASSOCIAR permanece a mesma e já estava correta)
     // Lógica de UPLOAD de novo arquivo e associação
     if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_novo'])) {
         $nome_documento = htmlspecialchars(trim($_POST['nome_documento']));
@@ -94,6 +95,7 @@ if ($isAdmin) {
                     $mensagem_status = "<div class='success-message-box'>Novo documento enviado e associado com sucesso!</div>";
                 } else {
                     $conn->rollback();
+                    unlink($caminho_arquivo); // Remove o arquivo se a associação falhar
                     $mensagem_status = "<div class='error-message-box'>Documento salvo, mas falha ao associar.</div>";
                 }
             } else {
@@ -106,10 +108,11 @@ if ($isAdmin) {
     // Lógica para DESASSOCIAR um documento
     if (isset($_GET['disassociate_id'])) {
         $disassociate_doc_id = intval($_GET['disassociate_id']);
+        // Desassocia de um ID de aeronave OU de um modelo específico, mas não de todos os modelos de uma vez
         $stmt_dis = $conn->prepare("DELETE FROM documentos_associados WHERE documento_id = ? AND (aeronave_id = ? OR modelo_aeronave = ?)");
         $stmt_dis->bind_param("iis", $disassociate_doc_id, $aeronave_id, $modelo_aeronave_atual);
         if ($stmt_dis->execute()) {
-            $mensagem_status = "<div class='success-message-box'>Associação removida com sucesso.</div>";
+            $mensagem_status = "<div class='success-message-box'>Associação removida com sucesso. O documento permanece na biblioteca.</div>";
         } else {
             $mensagem_status = "<div class='error-message-box'>Erro ao remover associação.</div>";
         }
@@ -117,40 +120,36 @@ if ($isAdmin) {
     }
 }
 
+// --- LÓGICA DE BUSCA DE DOCUMENTOS (OTIMIZADA) ---
+// Utiliza uma única query para buscar todos os documentos relevantes
+// Prioriza a associação específica ('especifico') sobre a de modelo ('modelo')
+$sql_documentos = "
+    SELECT 
+        d.id, 
+        d.nome_exibicao, 
+        d.caminho_arquivo, 
+        -- Define o tipo de associação, dando prioridade para 'especifico'
+        MIN(CASE 
+            WHEN da.aeronave_id = ? THEN 'especifico' 
+            ELSE 'modelo' 
+        END) AS tipo_associacao
+    FROM documentos d
+    JOIN documentos_associados da ON d.id = da.documento_id
+    WHERE da.aeronave_id = ? OR da.modelo_aeronave = ?
+    GROUP BY d.id, d.nome_exibicao, d.caminho_arquivo
+    ORDER BY d.nome_exibicao ASC
+";
 
-// --- LÓGICA DE BUSCA DE DOCUMENTOS (CORRIGIDA) ---
-$documentos_encontrados = [];
-$sql_especificos = "SELECT d.id, d.nome_exibicao, d.caminho_arquivo, 'especifico' as tipo_associacao
-                    FROM documentos d
-                    JOIN documentos_associados da ON d.id = da.documento_id
-                    WHERE da.aeronave_id = ?";
-$stmt_especificos = $conn->prepare($sql_especificos);
-$stmt_especificos->bind_param("i", $aeronave_id);
-$stmt_especificos->execute();
-$result_especificos = $stmt_especificos->get_result();
-while($row = $result_especificos->fetch_assoc()) {
-    $documentos_encontrados[$row['id']] = $row;
+$stmt_documentos = $conn->prepare($sql_documentos);
+$stmt_documentos->bind_param("iis", $aeronave_id, $aeronave_id, $modelo_aeronave_atual);
+$stmt_documentos->execute();
+$result_documentos = $stmt_documentos->get_result();
+
+while($row = $result_documentos->fetch_assoc()) {
+    $documentos_encontrados[] = $row;
 }
-$stmt_especificos->close();
+$stmt_documentos->close();
 
-$sql_modelo = "SELECT d.id, d.nome_exibicao, d.caminho_arquivo, 'modelo' as tipo_associacao
-               FROM documentos d
-               JOIN documentos_associados da ON d.id = da.documento_id
-               WHERE da.modelo_aeronave = ?";
-$stmt_modelo = $conn->prepare($sql_modelo);
-$stmt_modelo->bind_param("s", $modelo_aeronave_atual);
-$stmt_modelo->execute();
-$result_modelo = $stmt_modelo->get_result();
-while($row = $result_modelo->fetch_assoc()) {
-    if (!isset($documentos_encontrados[$row['id']])) {
-        $documentos_encontrados[$row['id']] = $row;
-    }
-}
-$stmt_modelo->close();
-
-usort($documentos_encontrados, function($a, $b) {
-    return strcasecmp($a['nome_exibicao'], $b['nome_exibicao']);
-});
 ?>
 
 <div class="main-content">
@@ -260,82 +259,21 @@ usort($documentos_encontrados, function($a, $b) {
 </div>
 
 <style>
-.radio-group .radio-label {
-    display: flex;
-    align-items: center;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: background-color 0.2s ease-in-out;
-}
-.radio-group .radio-label:hover {
-    background-color: #f7f7f7;
-}
-.radio-group input[type="radio"] {
-    margin-right: 12px;
-    flex-shrink: 0;
-    width: 1.2em;
-    height: 1.2em;
-}
-.radio-group .radio-text span {
-    line-height: 1.2;
-}
-.radio-group .radio-text small {
-    color: #6c757d;
-    font-size: 0.85em;
-    margin-top: 4px;
-    line-height: 1;
-    display: block;
-}
-.badge {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.8em;
-    font-weight: 700;
-    color: #fff;
-    white-space: nowrap;
-    vertical-align: middle;
-}
-.badge i {
-    margin-right: 4px;
-}
-.badge.modelo {
-    background-color: #17a2b8;
-}
-.badge.especifico {
-    background-color: #6c757d;
-}
-.action-buttons {
-    white-space: nowrap;
-}
-.action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    margin-right: 5px;
-    border-radius: 4px;
-    text-decoration: none;
-    color: #fff;
-    font-size: .85em;
-    transition: opacity 0.2s;
-}
-.action-btn:hover {
-    opacity: 0.85;
-}
-.action-btn.view-btn {
-    background-color: #6c757d;
-}
-.action-btn.download-btn {
-    background-color: #007bff;
-}
-.action-btn.disassociate-btn {
-    background-color: #ffc107;
-    color: #212529;
-    padding: 5px 8px;
-}
+.radio-group .radio-label { display: flex; align-items: center; padding: 12px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; cursor: pointer; transition: background-color 0.2s ease-in-out; }
+.radio-group .radio-label:hover { background-color: #f7f7f7; }
+.radio-group input[type="radio"] { margin-right: 12px; flex-shrink: 0; width: 1.2em; height: 1.2em; }
+.radio-group .radio-text span { line-height: 1.2; }
+.radio-group .radio-text small { color: #6c757d; font-size: 0.85em; margin-top: 4px; line-height: 1; display: block; }
+.badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 700; color: #fff; white-space: nowrap; vertical-align: middle; }
+.badge i { margin-right: 4px; }
+.badge.modelo { background-color: #17a2b8; }
+.badge.especifico { background-color: #6c757d; }
+.action-buttons { white-space: nowrap; }
+.action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; margin-right: 5px; border-radius: 4px; text-decoration: none; color: #fff; font-size: .85em; transition: opacity 0.2s; }
+.action-btn:hover { opacity: 0.85; }
+.action-btn.view-btn { background-color: #6c757d; }
+.action-btn.download-btn { background-color: #007bff; }
+.action-btn.disassociate-btn { background-color: #ffc107; color: #212529; padding: 5px 8px; }
 </style>
 
 <?php

@@ -37,7 +37,7 @@ if ($isAdmin) {
         $total_manutencoes = $result_total_manutencoes->fetch_assoc()['total'];
     }
 
-} 
+}
 // Lógica para Piloto
 elseif ($isPiloto) {
     $crbm_do_usuario = '';
@@ -95,7 +95,7 @@ elseif ($isPiloto) {
 
 // ### LÓGICA PARA AS ÚLTIMAS MISSÕES ###
 $ultimas_missoes = [];
-// CORREÇÃO APLICADA AQUI: m.data_ocorrencia foi trocado para m.data
+// CORREÇÃO APLICADA AQUI: m.data_ocorrencia foi revertido para m.data
 $sql_ultimas_missoes = "
     SELECT 
         m.id, m.data, m.total_tempo_voo,
