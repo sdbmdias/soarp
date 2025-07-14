@@ -255,4 +255,3 @@ document.addEventListener('DOMContentLoaded', function() {
 // 6. INCLUI O RODAPÉ
 require_once 'includes/footer.php';
 ?>
-.
