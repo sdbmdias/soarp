@@ -6,9 +6,9 @@
 
 // Configurações do banco de dados
 $servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "drones_db";
+$username = "flyltm00_soarp";
+$password = "$1JKLjkl1$123";
+$dbname = "flyltm00_soarp";
 
 // Cria a conexão
 $conn = new mysqli($servername, $username, $password, $dbname);
