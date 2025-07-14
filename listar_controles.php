@@ -40,6 +40,20 @@ if (isset($result_controles) && $result_controles->num_rows > 0) {
 }
 ?>
 
+<style>
+/* Adiciona uma dica visual para rolagem em telas pequenas */
+@media (max-width: 768px) {
+    .table-container::after {
+        content: '◄ Arraste para ver mais ►';
+        display: block;
+        text-align: center;
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 10px;
+    }
+}
+</style>
+
 <div class="main-content">
     <h1>Lista de Controles (Rádios)</h1>
     <div class="table-container">

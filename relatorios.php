@@ -82,6 +82,20 @@ function formatarDistancia($metros) {
 }
 ?>
 
+<style>
+/* Adiciona uma dica visual para rolagem em telas pequenas */
+@media (max-width: 768px) {
+    .table-container::after {
+        content: '◄ Arraste para ver mais ►';
+        display: block;
+        text-align: center;
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 10px;
+    }
+}
+</style>
+
 <div class="main-content">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <h1>Relatórios Gerais</h1>

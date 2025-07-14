@@ -4,29 +4,43 @@ require_once 'gpx_parser.php';
 
 $mensagem_status = "";
 
-// 1. Busca aeronaves, incluindo o CRBM para o filtro de pilotos
+// 1. Busca aeronaves e tipos de ocorrência
 $aeronaves_disponiveis = [];
-$sql_aeronaves = "SELECT id, prefixo, modelo, crbm FROM aeronaves WHERE status = 'ativo' ORDER BY prefixo ASC";
-$result_aeronaves = $conn->query($sql_aeronaves);
+$tipos_ocorrencia = [];
+
+// Filtra aeronaves por CRBM se o usuário for piloto
+if ($isPiloto) {
+    $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
+    $stmt_crbm->bind_param("i", $_SESSION['user_id']);
+    $stmt_crbm->execute();
+    $result_crbm = $stmt_crbm->get_result();
+    $crbm_do_piloto = $result_crbm->fetch_assoc()['crbm_piloto'];
+    $stmt_crbm->close();
+    
+    $sql_aeronaves = "SELECT id, prefixo, modelo, crbm FROM aeronaves WHERE status = 'ativo' AND crbm = ? ORDER BY prefixo ASC";
+    $stmt_aeronaves = $conn->prepare($sql_aeronaves);
+    $stmt_aeronaves->bind_param("s", $crbm_do_piloto);
+    $stmt_aeronaves->execute();
+    $result_aeronaves = $stmt_aeronaves->get_result();
+} else { // Admin vê todas
+    $sql_aeronaves = "SELECT id, prefixo, modelo, crbm FROM aeronaves WHERE status = 'ativo' ORDER BY prefixo ASC";
+    $result_aeronaves = $conn->query($sql_aeronaves);
+}
+
 if ($result_aeronaves) {
     while($row = $result_aeronaves->fetch_assoc()) {
         $aeronaves_disponiveis[] = $row;
     }
 }
 
-// 2. Busca TODOS os pilotos ativos e agrupa por CRBM para o JavaScript
-$pilotos_por_crbm = [];
-$sql_pilotos = "SELECT id, posto_graduacao, nome_completo, crbm_piloto FROM pilotos WHERE status_piloto = 'ativo' ORDER BY nome_completo ASC";
-$result_pilotos = $conn->query($sql_pilotos);
-if ($result_pilotos) {
-    while($row = $result_pilotos->fetch_assoc()) {
-        $crbm = $row['crbm_piloto'];
-        if (!isset($pilotos_por_crbm[$crbm])) {
-            $pilotos_por_crbm[$crbm] = [];
-        }
-        $pilotos_por_crbm[$crbm][] = $row;
+// Busca os tipos de ocorrência cadastrados
+$result_ocorrencias = $conn->query("SELECT id, nome FROM tipos_ocorrencia ORDER BY nome ASC");
+if($result_ocorrencias) {
+    while($row = $result_ocorrencias->fetch_assoc()) {
+        $tipos_ocorrencia[] = $row;
     }
 }
+
 
 // LÓGICA DE SUBMISSÃO DO FORMULÁRIO
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -51,6 +65,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $pilotos_selecionados = array_unique(array_filter($_POST['pilotos']));
             $data_ocorrencia = htmlspecialchars($_POST['data_ocorrencia']);
             $tipo_ocorrencia = htmlspecialchars($_POST['tipo_ocorrencia']);
+            $protocolo_sarpas = htmlspecialchars($_POST['protocolo_sarpas']);
             $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
             $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
 
@@ -60,8 +75,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $data_primeira_decolagem = $logData['data_primeira_decolagem'];
             $data_ultimo_pouso = $logData['data_ultimo_pouso'];
 
-            $stmt_missao = $conn->prepare("INSERT INTO missoes (aeronave_id, data_ocorrencia, tipo_ocorrencia, rgo_ocorrencia, dados_vitima, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt_missao->bind_param("issssdidss", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $rgo_ocorrencia, $dados_vitima, $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso);
+            $stmt_missao = $conn->prepare("INSERT INTO missoes (aeronave_id, data_ocorrencia, tipo_ocorrencia, protocolo_sarpas, rgo_ocorrencia, dados_vitima, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt_missao->bind_param("isssssdidss", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $protocolo_sarpas, $rgo_ocorrencia, $dados_vitima, $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso);
             $stmt_missao->execute();
             $missao_id = $conn->insert_id;
             $stmt_missao->close();
@@ -82,8 +97,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($_FILES['gpx_files']['error'][$key] == UPLOAD_ERR_OK) {
                     
                     $file_log_data = $individualFileData[$key];
-                    // ### CORREÇÃO AQUI ###
-                    // Definimos o caminho como uma string vazia em vez de null.
                     $file_path_db = ''; 
 
                     $tempo_voo_individual = $file_log_data['tempo_voo'];
@@ -116,7 +129,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_logbook->close();
 
             $conn->commit();
-            $mensagem_status = "<div class='success-message-box'>Missão registrada com sucesso! A redirecionar...</div>";
+            $mensagem_status = "<div class='success-message-box'>Missão registrada com sucesso! Redirecionando...</div>";
+            echo "<script>setTimeout(function() { window.location.href = 'listar_missoes.php'; }, 2000);</script>";
+
         } catch (Exception $e) {
             $conn->rollback();
             $mensagem_status = "<div class='error-message-box'>Erro ao registrar a missão: " . $e->getMessage() . "</div>";
@@ -152,7 +167,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div id="pilots-container">
                             <small>Selecione uma aeronave para carregar a lista de pilotos.</small>
                         </div>
-                        <button type="button" id="add-pilot-btn" class="button-secondary" style="margin-top: 10px;" disabled>Adicionar outro Piloto</button>
+                        <button type="button" id="add-pilot-btn" class="button-secondary" style="margin-top: 10px; display: none;">Adicionar outro Piloto</button>
                     </div>
                 </div>
                 <div class="form-grid">
@@ -162,14 +177,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                     <div class="form-group">
                         <label for="tipo_ocorrencia">Tipo da Ocorrência:</label>
-                        <input type="text" id="tipo_ocorrencia" name="tipo_ocorrencia" placeholder="Ex: Busca e salvamento" required>
+                        <select id="tipo_ocorrencia" name="tipo_ocorrencia" required>
+                            <option value="">Selecione o Tipo</option>
+                            <?php foreach($tipos_ocorrencia as $tipo): ?>
+                                <option value="<?php echo htmlspecialchars($tipo['nome']); ?>"><?php echo htmlspecialchars($tipo['nome']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="protocolo_sarpas">Protocolo SARPAS:</label>
+                        <input type="text" id="protocolo_sarpas" name="protocolo_sarpas" placeholder="Ex: AS202407-1234" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="rgo_ocorrencia">Nº do RGO:</label>
+                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" placeholder="Ex: 123456/2025" required>
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label for="rgo_ocorrencia">Nº do RGO (se aplicável):</label>
-                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" placeholder="Ex: 123456/2025">
-                    </div>
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <label for="dados_vitima">Dados da Vítima (se aplicável):</label>
+                        <label for="dados_vitima">Dados da Vítima (Opcional):</label>
                         <textarea id="dados_vitima" name="dados_vitima" rows="3" placeholder="Informações relevantes sobre a vítima ou alvo da busca."></textarea>
                     </div>
                 </div>
@@ -192,104 +216,108 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 </div>
 
-<style>
-    fieldset { border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 25px; }
-    legend { font-weight: 700; color: #34495e; padding: 0 10px; }
-    #file-list { font-size: 0.9em; color: #555; }
-    .button-secondary { background-color: #6c757d; color: #fff; padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9em; }
-    .button-secondary:disabled { background-color: #c8cbcf; cursor: not-allowed; }
-    .pilot-selector-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const pilotosPorCrbm = <?php echo json_encode($pilotos_por_crbm); ?>;
-    const isUserAdmin = <?php echo json_encode($isAdmin); ?>;
     const aeronaveSelect = document.getElementById('aeronave_id');
     const pilotsContainer = document.getElementById('pilots-container');
     const addPilotBtn = document.getElementById('add-pilot-btn');
-    let availablePilots = [];
-
-    function createPilotSelector(pilots) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'pilot-selector-wrapper';
-        const select = document.createElement('select');
-        select.name = 'pilotos[]';
-        select.className = 'form-control';
-        select.required = true;
-        const placeholder = document.createElement('option');
-        placeholder.value = "";
-        placeholder.textContent = "Selecione um piloto...";
-        select.appendChild(placeholder);
-        pilots.forEach(piloto => {
-            const option = document.createElement('option');
-            option.value = piloto.id;
-            option.textContent = `${piloto.posto_graduacao} ${piloto.nome_completo}`;
-            select.appendChild(option);
-        });
-        wrapper.appendChild(select);
-        return wrapper;
-    }
-
-    function updateAvailablePilots(crbm) {
-        if (isUserAdmin) {
-            availablePilots = Object.values(pilotosPorCrbm).flat();
-        } else {
-            availablePilots = pilotosPorCrbm[crbm] || [];
-        }
-    }
+    let pilotList = [];
 
     aeronaveSelect.addEventListener('change', function() {
-        pilotsContainer.innerHTML = '';
         const selectedOption = this.options[this.selectedIndex];
-        const crbm = selectedOption.dataset.crbm;
+        const crbm = selectedOption.getAttribute('data-crbm');
+        
+        // Limpa a seleção de pilotos e esconde o botão
+        pilotsContainer.innerHTML = '<small>Carregando pilotos...</small>';
+        addPilotBtn.style.display = 'none';
+
         if (crbm) {
-            updateAvailablePilots(crbm);
-            if(availablePilots.length > 0) {
-                const firstSelectorWrapper = createPilotSelector(availablePilots);
-                pilotsContainer.appendChild(firstSelectorWrapper);
-                addPilotBtn.disabled = availablePilots.length <= 1;
-            } else {
-                pilotsContainer.innerHTML = '<small style="color:red;">Nenhum piloto ativo encontrado para o CRBM desta aeronave.</small>';
-                addPilotBtn.disabled = true;
-            }
+            fetch(`get_pilotos.php?crbm=${crbm}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Erro na rede ou no servidor.');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    pilotList = data;
+                    pilotsContainer.innerHTML = ''; // Limpa a mensagem de "carregando"
+                    if (pilotList.length > 0) {
+                        addPilotSelect(); // Adiciona o primeiro select
+                        addPilotBtn.style.display = 'inline-block'; // Mostra o botão
+                    } else {
+                        pilotsContainer.innerHTML = '<small>Nenhum piloto ativo encontrado para este CRBM.</small>';
+                    }
+                })
+                .catch(error => {
+                    pilotsContainer.innerHTML = `<small style="color: red;">Erro ao carregar pilotos: ${error.message}</small>`;
+                });
         } else {
             pilotsContainer.innerHTML = '<small>Selecione uma aeronave para carregar a lista de pilotos.</small>';
-            addPilotBtn.disabled = true;
         }
     });
 
-    addPilotBtn.addEventListener('click', function() {
-        const currentSelectors = pilotsContainer.querySelectorAll('select');
-        const selectedPilotIds = Array.from(currentSelectors).map(s => s.value).filter(Boolean);
-        const remainingPilots = availablePilots.filter(p => !selectedPilotIds.includes(p.id.toString()));
-        if (remainingPilots.length > 0) {
-            const newSelectorWrapper = createPilotSelector(remainingPilots);
+    function addPilotSelect() {
+        const selectWrapper = document.createElement('div');
+        selectWrapper.style.display = 'flex';
+        selectWrapper.style.alignItems = 'center';
+        selectWrapper.style.marginBottom = '5px';
+
+        const newSelect = document.createElement('select');
+        newSelect.name = 'pilotos[]';
+        newSelect.required = true;
+        
+        let optionsHtml = '<option value="">Selecione um piloto</option>';
+        pilotList.forEach(piloto => {
+            optionsHtml += `<option value="${piloto.id}">${piloto.nome_completo}</option>`;
+        });
+        newSelect.innerHTML = optionsHtml;
+
+        selectWrapper.appendChild(newSelect);
+
+        // Adicionar botão de remover, exceto para o primeiro select
+        if (pilotsContainer.children.length > 0) {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.textContent = 'Remover';
-            removeBtn.className = 'button-secondary';
+            removeBtn.style.marginLeft = '10px';
             removeBtn.style.backgroundColor = '#dc3545';
+            removeBtn.style.color = 'white';
+            removeBtn.style.border = 'none';
+            removeBtn.style.padding = '5px 10px';
+            removeBtn.style.borderRadius = '4px';
+            removeBtn.style.cursor = 'pointer';
             removeBtn.onclick = function() {
-                newSelectorWrapper.remove();
-                addPilotBtn.disabled = false;
+                pilotsContainer.removeChild(selectWrapper);
             };
-            newSelectorWrapper.appendChild(removeBtn);
-            pilotsContainer.appendChild(newSelectorWrapper);
-            if (remainingPilots.length <= 1) {
-                addPilotBtn.disabled = true;
-            }
-        } else {
-            addPilotBtn.disabled = true;
+            selectWrapper.appendChild(removeBtn);
+        }
+        
+        pilotsContainer.appendChild(selectWrapper);
+    }
+
+    addPilotBtn.addEventListener('click', addPilotSelect);
+
+    // Validação para não permitir submeter pilotos duplicados
+    const form = document.getElementById('missaoForm');
+    form.addEventListener('submit', function(e) {
+        const selectedPilots = Array.from(document.querySelectorAll('select[name="pilotos[]"]')).map(s => s.value);
+        const uniquePilots = new Set(selectedPilots);
+
+        if (selectedPilots.length > uniquePilots.size) {
+            e.preventDefault();
+            alert('Erro: Por favor, não selecione o mesmo piloto mais de uma vez.');
         }
     });
 
+    // Exibe os nomes dos arquivos selecionados
     const gpxInput = document.getElementById('gpx_files');
     const fileListDiv = document.getElementById('file-list');
     gpxInput.addEventListener('change', function() {
         fileListDiv.innerHTML = '';
         if (this.files.length > 0) {
             const list = document.createElement('ul');
+            list.style.paddingLeft = '20px';
             for (const file of this.files) {
                 const item = document.createElement('li');
                 item.textContent = file.name;
@@ -298,13 +326,6 @@ document.addEventListener('DOMContentLoaded', function() {
             fileListDiv.appendChild(list);
         }
     });
-
-    const successMessage = document.querySelector('.success-message-box');
-    if (successMessage) {
-        setTimeout(function() {
-            window.location.href = 'listar_missoes.php';
-        }, 2000);
-    }
 });
 </script>
 

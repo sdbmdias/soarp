@@ -107,24 +107,26 @@ if ($result_unidades->num_rows > 0) {
         <?php if (!empty($unidades_cadastradas)): ?>
             <?php foreach ($unidades_cadastradas as $crbm => $obms): ?>
                 <h3 style="margin-top: 20px; border-bottom: 2px solid #ccc; padding-bottom: 5px;"><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $crbm)); ?></h3>
-                <table class="data-table" style="margin-top: 10px;">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">OBM/Seção</th>
-                            <th style="width: 150px;">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($obms as $unidade): ?>
+                <div class="table-container" style="padding: 0; box-shadow: none;">
+                    <table class="data-table" style="margin-top: 10px;">
+                        <thead>
                             <tr>
-                                <td style="text-align: left;"><?php echo htmlspecialchars($unidade['obm']); ?></td>
-                                <td class="action-buttons">
-                                    <a href="cadastro_crbm_obm.php?delete_id=<?php echo $unidade['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir esta unidade?');">Excluir</a>
-                                </td>
+                                <th style="text-align: left;">OBM/Seção</th>
+                                <th style="width: 150px;">Ação</th>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($obms as $unidade): ?>
+                                <tr>
+                                    <td style="text-align: left;"><?php echo htmlspecialchars($unidade['obm']); ?></td>
+                                    <td class="action-buttons">
+                                        <a href="cadastro_crbm_obm.php?delete_id=<?php echo $unidade['id']; ?>" class="edit-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir esta unidade?');">Excluir</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             <?php endforeach; ?>
         <?php else: ?>
             <p>Nenhuma unidade cadastrada.</p>

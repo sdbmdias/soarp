@@ -176,14 +176,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Carrega os modelos e unidades do PHP
     const modelosPorFabricante = <?php echo json_encode($fabricantes_e_modelos); ?>;
     const obmPorCrbm = <?php echo json_encode($unidades); ?>;
-
     const form = document.getElementById('aeronaveForm');
     const saveButton = document.getElementById('saveButton');
     const requiredFields = Array.from(form.querySelectorAll('[required]'));
-
     const fabricanteSelect = document.getElementById("fabricante");
     const modeloSelect = document.getElementById("modelo");
     const crbmSelect = document.getElementById("crbm");

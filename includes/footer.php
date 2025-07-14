@@ -1,34 +1,55 @@
 <script>
-    // Adiciona um listener para garantir que o DOM foi completamente carregado
     document.addEventListener('DOMContentLoaded', function() {
-        // Seleciona os elementos do menu admin
+        // Lógica do submenu para desktop
         const adminMenuToggle = document.getElementById('admin-menu-toggle');
         const adminSubmenu = document.getElementById('admin-submenu');
         const adminMenuItem = document.getElementById('admin-menu');
 
-        // Verifica se o menu de administrador existe na página
         if (adminMenuToggle && adminSubmenu) {
-            
-            // Lógica para abrir o submenu se a página atual for uma página de admin
-            const adminPages = ['cadastro_aeronaves.php', 'cadastro_pilotos.php', 'cadastro_controles.php', 'alertas.php'];
+            const adminPages = ['listar_relprev.php', 'cadastro_aeronaves.php', 'cadastro_pilotos.php', 'cadastro_controles.php', 'cadastro_modelos.php', 'cadastro_crbm_obm.php', 'cadastro_tipos_ocorrencia.php', 'gerenciar_documentos.php', 'alertas.php'];
             const currentPage = window.location.pathname.split('/').pop();
 
             if (adminPages.includes(currentPage)) {
                 adminMenuItem.classList.add('open');
                 adminSubmenu.classList.add('open');
+                adminSubmenu.style.maxHeight = adminSubmenu.scrollHeight + "px"; // Ajuste para altura correta
             }
 
-            // Adiciona o evento de clique para abrir/fechar o submenu
             adminMenuToggle.addEventListener('click', function(event) {
-                event.preventDefault(); // Previne que o link '#' navegue
-                
-                // Alterna a classe 'open' no item do menu e no submenu
-                // A classe 'open' controla a visibilidade e a rotação da seta via CSS
+                event.preventDefault();
                 adminMenuItem.classList.toggle('open');
-                adminSubmenu.classList.toggle('open');
+                if (adminMenuItem.classList.contains('open')) {
+                    adminSubmenu.style.maxHeight = adminSubmenu.scrollHeight + "px";
+                } else {
+                    adminSubmenu.style.maxHeight = '0';
+                }
             });
         }
+
+        // Lógica do menu mobile
+        const menuToggle = document.querySelector('.menu-toggle');
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.querySelector('.overlay');
+
+        if (menuToggle && sidebar && overlay) {
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            });
+
+            overlay.addEventListener('click', function() {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        }
+
+        // Atualiza o título da página no header mobile
+        const pageTitleElement = document.querySelector('.main-content h1');
+        const mobileTitleElement = document.querySelector('.mobile-header .page-title');
+        if (pageTitleElement && mobileTitleElement) {
+            mobileTitleElement.textContent = pageTitleElement.textContent.trim();
+        }
     });
-    </script>
+</script>
 </body>
 </html>

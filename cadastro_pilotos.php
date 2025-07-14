@@ -46,18 +46,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $senha_redefinida = 0;
     $senha_hashed = password_hash($senha, PASSWORD_DEFAULT);
 
-    // Atualiza a instrução SQL para incluir o novo campo
     $stmt = $conn->prepare("INSERT INTO pilotos (posto_graduacao, nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, senha, tipo_usuario, senha_redefinida) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("ssssssssssssssi", $posto_graduacao, $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $senha_hashed, $tipo_usuario, $senha_redefinida);
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Piloto cadastrado com sucesso!</div>";
     } else {
-        $mensagem_status = "<div class='error-message-box'>Erro ao cadastrar piloto: " . htmlspecialchars($stmt->error) . "</div>";
+        if ($conn->errno == 1062) {
+            if (strpos($conn->error, "'rg'") !== false) {
+                $mensagem_status = "<div class='error-message-box'>Erro: O RG informado já está cadastrado.</div>";
+            } elseif (strpos($conn->error, "'cpf'") !== false) {
+                $mensagem_status = "<div class='error-message-box'>Erro: O CPF informado já está cadastrado.</div>";
+            } elseif (strpos($conn->error, "'email'") !== false) {
+                $mensagem_status = "<div class='error-message-box'>Erro: O E-mail informado já está cadastrado.</div>";
+            } else {
+                $mensagem_status = "<div class='error-message-box'>Erro: Um dos valores únicos (RG, CPF ou E-mail) já existe no sistema.</div>";
+            }
+        } else {
+            $mensagem_status = "<div class='error-message-box'>Erro ao cadastrar piloto: " . htmlspecialchars($stmt->error) . "</div>";
+        }
     }
     $stmt->close();
 }
 ?>
+
+<style>
+    .form-grid-piloto {
+        display: grid;
+        grid-template-columns: 1fr 3fr;
+        gap: 20px;
+        align-items: flex-end;
+    }
+    @media (max-width: 768px) {
+        .form-grid-piloto {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 <div class="main-content">
     <h1>Cadastro de Pilotos</h1>
@@ -67,7 +92,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="form-container">
         <form id="pilotoForm" action="cadastro_pilotos.php" method="POST">
             <div class="form-grid-piloto">
-                <div class="form-group" style="grid-column: 1 / 2;">
+                <div class="form-group">
                     <label for="posto_graduacao">Posto/Graduação:</label>
                     <select id="posto_graduacao" name="posto_graduacao" required>
                         <option value="">Selecione...</option>
@@ -86,7 +111,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="Sd. QPBM">Sd. QPBM</option>
                     </select>
                 </div>
-                <div class="form-group" style="grid-column: 2 / 5;">
+                <div class="form-group">
                     <label for="nome_completo">Nome Completo:</label>
                     <input type="text" id="nome_completo" name="nome_completo" placeholder="Nome completo do piloto" required>
                 </div>
@@ -165,16 +190,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </form>
     </div>
 </div>
-
-<style>
-    /* Novo estilo para o grid de nome */
-    .form-grid-piloto {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr;
-        gap: 20px;
-        align-items: flex-end;
-    }
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

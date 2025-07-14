@@ -2,7 +2,37 @@
 // 1. INCLUI O CABEÇALHO PADRÃO
 require_once 'includes/header.php';
 
-// 2. LÓGICA ESPECÍFICA DA PÁGINA
+$mensagem_status = "";
+
+// 2. LÓGICA DE EXCLUSÃO (APENAS PARA ADMINS)
+if ($isAdmin && isset($_GET['delete_id'])) {
+    $delete_id = intval($_GET['delete_id']);
+
+    // Verifica se o piloto está associado a alguma missão
+    $stmt_check = $conn->prepare("SELECT COUNT(*) AS total FROM missoes_pilotos WHERE piloto_id = ?");
+    $stmt_check->bind_param("i", $delete_id);
+    $stmt_check->execute();
+    $result_check = $stmt_check->get_result()->fetch_assoc();
+    $stmt_check->close();
+
+    if ($result_check['total'] > 0) {
+        // Se estiver associado, impede a exclusão
+        $mensagem_status = "<div class='error-message-box'>Não é possível excluir este piloto, pois ele está associado a missões existentes. Considere alterar o status para 'Desativado'.</div>";
+    } else {
+        // Se não houver missões, permite a exclusão
+        $stmt_delete = $conn->prepare("DELETE FROM pilotos WHERE id = ?");
+        $stmt_delete->bind_param("i", $delete_id);
+        if ($stmt_delete->execute()) {
+            $mensagem_status = "<div class='success-message-box'>Piloto excluído com sucesso!</div>";
+        } else {
+            $mensagem_status = "<div class='error-message-box'>Erro ao excluir o piloto.</div>";
+        }
+        $stmt_delete->close();
+    }
+}
+
+
+// 3. LÓGICA PARA LISTAR OS PILOTOS
 $pilotos = [];
 
 // Atualiza a consulta para ordenar por graduação
@@ -34,15 +64,31 @@ if ($result_pilotos) {
 }
 ?>
 
+<style>
+/* Adiciona uma dica visual para rolagem em telas pequenas */
+@media (max-width: 768px) {
+    .table-container::after {
+        content: '◄ Arraste para ver mais ►';
+        display: block;
+        text-align: center;
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 10px;
+    }
+}
+</style>
+
 <div class="main-content">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <h1>Pilotos Cadastrados</h1>
         <?php if ($isAdmin): ?>
-            <a href="cadastro_pilotos.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #28a745; color: #fff;">
-                <i class="fas fa-plus"></i> Adicionar Novo Piloto
+            <a href="cadastro_pilotos.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #28a745; color: #fff; margin-top: 0; padding-top: 10px; padding-bottom: 10px;">
+                <i class="fas fa-plus"></i> Adicionar Piloto
             </a>
         <?php endif; ?>
     </div>
+
+    <?php if(!empty($mensagem_status)) echo $mensagem_status; ?>
 
     <div class="table-container">
         <table class="data-table">
@@ -76,6 +122,7 @@ if ($result_pilotos) {
                             <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_pilotos.php?id=<?php echo $piloto['id']; ?>" class="edit-btn">Editar</a>
+                                <a href="listar_pilotos.php?delete_id=<?php echo $piloto['id']; ?>" class="edit-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir este piloto? Esta ação não pode ser desfeita.');">Excluir</a>
                             </td>
                             <?php endif; ?>
                         </tr>

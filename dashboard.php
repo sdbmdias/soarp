@@ -135,6 +135,31 @@ function formatarTempoVoo($segundos) {
 }
 ?>
 
+<style>
+.dashboard-header { margin-bottom: 30px; }
+.welcome-message { font-size: 1.1em; color: #555; margin-top: -15px; }
+.dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; margin-bottom: 40px; }
+.card { background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,.05); display: flex; align-items: center; gap: 20px; transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+.card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,.08); }
+.card-icon { font-size: 28px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.card-content h2 { margin: 0 0 5px 0; font-size: 1em; color: #555; font-weight: 600; }
+.card-content p { margin: 0; font-size: 2.2em; font-weight: 700; color: #2c3e50; }
+.recent-missions h2 { display: flex; align-items: center; gap: 10px; color: #2c3e50; margin-bottom: 15px; }
+
+@media (max-width: 768px) {
+    .dashboard-cards {
+        grid-template-columns: 1fr; /* Cards em coluna única */
+    }
+    .card {
+        flex-direction: column;
+        text-align: center;
+    }
+    .card-content h2 {
+        font-size: 1.1em;
+    }
+}
+</style>
+
 <div class="main-content">
     <div class="dashboard-header">
         <h1>Dashboard</h1>
@@ -230,65 +255,6 @@ function formatarTempoVoo($segundos) {
         </div>
     </div>
 </div>
-
-<style>
-.dashboard-header {
-    margin-bottom: 30px;
-}
-.welcome-message {
-    font-size: 1.1em;
-    color: #555;
-    margin-top: -15px;
-}
-.dashboard-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 25px;
-    margin-bottom: 40px;
-}
-.card {
-    background-color: #fff;
-    padding: 25px;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,.05);
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,.08);
-}
-.card-icon {
-    font-size: 28px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.card-content h2 {
-    margin: 0 0 5px 0;
-    font-size: 1em;
-    color: #555;
-    font-weight: 600;
-}
-.card-content p {
-    margin: 0;
-    font-size: 2.2em;
-    font-weight: 700;
-    color: #2c3e50;
-}
-.recent-missions h2 {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #2c3e50;
-    margin-bottom: 15px;
-}
-</style>
 
 <?php
 // 4. INCLUI O RODAPÉ (com scripts JS e fechamento do HTML)

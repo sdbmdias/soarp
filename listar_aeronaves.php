@@ -2,7 +2,51 @@
 // 1. INCLUI O CABEÇALHO PADRÃO
 require_once 'includes/header.php';
 
-// 2. LÓGICA ESPECÍFICA DA PÁGINA
+$mensagem_status = "";
+
+// 2. LÓGICA DE EXCLUSÃO (APENAS PARA ADMINS)
+if ($isAdmin && isset($_GET['delete_id'])) {
+    $delete_id = intval($_GET['delete_id']);
+
+    // Verifica se a aeronave está associada a missões, manutenções ou controles
+    $stmt_check_missoes = $conn->prepare("SELECT COUNT(*) AS total FROM missoes WHERE aeronave_id = ?");
+    $stmt_check_missoes->bind_param("i", $delete_id);
+    $stmt_check_missoes->execute();
+    $missoes_count = $stmt_check_missoes->get_result()->fetch_assoc()['total'];
+    $stmt_check_missoes->close();
+
+    $stmt_check_manutencoes = $conn->prepare("SELECT COUNT(*) AS total FROM manutencoes WHERE equipamento_tipo = 'Aeronave' AND equipamento_id = ?");
+    $stmt_check_manutencoes->bind_param("i", $delete_id);
+    $stmt_check_manutencoes->execute();
+    $manutencoes_count = $stmt_check_manutencoes->get_result()->fetch_assoc()['total'];
+    $stmt_check_manutencoes->close();
+
+    $stmt_check_controles = $conn->prepare("SELECT COUNT(*) AS total FROM controles WHERE aeronave_id = ?");
+    $stmt_check_controles->bind_param("i", $delete_id);
+    $stmt_check_controles->execute();
+    $controles_count = $stmt_check_controles->get_result()->fetch_assoc()['total'];
+    $stmt_check_controles->close();
+
+    if ($missoes_count > 0 || $manutencoes_count > 0 || $controles_count > 0) {
+        // Se houver qualquer vínculo, impede a exclusão
+        $mensagem_status = "<div class='error-message-box'>Não é possível excluir esta aeronave, pois ela possui registros de missões, manutenções ou controles vinculados. Considere alterar o status para 'Baixada'.</div>";
+    } else {
+        // Permite a exclusão se não houver vínculos
+        $stmt_delete = $conn->prepare("DELETE FROM aeronaves WHERE id = ?");
+        $stmt_delete->bind_param("i", $delete_id);
+        if ($stmt_delete->execute()) {
+            // Também remove do logbook se existir
+            $conn->query("DELETE FROM aeronaves_logbook WHERE aeronave_id = $delete_id");
+            $mensagem_status = "<div class='success-message-box'>Aeronave excluída com sucesso!</div>";
+        } else {
+            $mensagem_status = "<div class='error-message-box'>Erro ao excluir a aeronave.</div>";
+        }
+        $stmt_delete->close();
+    }
+}
+
+
+// 3. LÓGICA PARA LISTAR AS AERONAVES
 $aeronaves = [];
 
 if ($isPiloto) {
@@ -34,9 +78,24 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
     }
 }
 ?>
-
+<style>
+/* Adiciona uma dica visual para rolagem em telas pequenas */
+@media (max-width: 768px) {
+    .table-container::after {
+        content: '◄ Arraste para ver mais ►';
+        display: block;
+        text-align: center;
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 10px;
+    }
+}
+</style>
 <div class="main-content">
     <h1>Lista de Aeronaves</h1>
+    
+    <?php if(!empty($mensagem_status)) echo $mensagem_status; ?>
+
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -90,6 +149,7 @@ if (isset($result_aeronaves) && $result_aeronaves->num_rows > 0) {
                             <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_aeronaves.php?id=<?php echo $aeronave['id']; ?>" class="edit-btn">Editar</a>
+                                <a href="listar_aeronaves.php?delete_id=<?php echo $aeronave['id']; ?>" class="edit-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir esta aeronave? Esta ação não pode ser desfeita e só funcionará se não houver missões ou manutenções vinculadas.');">Excluir</a>
                             </td>
                             <?php endif; ?>
                         </tr>

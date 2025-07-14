@@ -106,8 +106,27 @@ function formatarTempoVoo($segundos) {
 }
 ?>
 
+<style>
+/* Adiciona uma dica visual para rolagem em telas pequenas */
+@media (max-width: 768px) {
+    .table-container::after {
+        content: '◄ Arraste para ver mais ►';
+        display: block;
+        text-align: center;
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 10px;
+    }
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+}
+</style>
+
 <div class="main-content">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
         <h1>Logbook de Missões</h1>
         <a href="cadastro_missao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #28a745; color: #fff;">
             <i class="fas fa-plus"></i> Adicionar Nova Missão
@@ -143,7 +162,6 @@ function formatarTempoVoo($segundos) {
                             <td class="action-buttons">
                                 <a href="ver_missao.php?id=<?php echo $missao['id']; ?>" class="edit-btn">Ver Detalhes</a>
                                 <?php if ($isAdmin): ?>
-                                    <a href="editar_missao.php?id=<?php echo $missao['id']; ?>" class="edit-btn" style="background-color: #ffc107; color: #212529;">Editar</a>
                                     <a href="listar_missoes.php?delete_id=<?php echo $missao['id']; ?>" class="edit-btn" style="background-color: #dc3545; color: #fff;" onclick="return confirm('Tem a certeza que deseja excluir permanentemente a missão (RGO: <?php echo htmlspecialchars($missao['rgo_ocorrencia']); ?>) e todos os seus dados associados? Esta ação é irreversível.');">Excluir</a>
                                 <?php endif; ?>
                             </td>

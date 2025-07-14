@@ -79,6 +79,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
              $conn->query("UPDATE controles SET status = 'ativo' WHERE id = $equipamento_id");
         }
         $mensagem_status = "<div class='success-message-box'>Manutenção registrada com sucesso! Redirecionando...</div>";
+        echo "<script>setTimeout(function() { window.location.href = 'manutencao.php'; }, 2000);</script>";
     } else {
         $mensagem_status = "<div class='error-message-box'>Erro ao registrar manutenção: " . htmlspecialchars($stmt->error) . "</div>";
     }
@@ -198,14 +199,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chama a função uma vez para definir o estado inicial do botão
     checkFormValidity();
-
-    // --- Lógica de redirecionamento após sucesso ---
-    const successMessage = document.querySelector('.success-message-box');
-    if (successMessage) {
-        setTimeout(function() {
-            window.location.href = 'manutencao.php';
-        }, 2000); // 2 segundos
-    }
 });
 </script>
 

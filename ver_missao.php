@@ -6,19 +6,20 @@ $missao_details = null;
 $pilotos_envolvidos = [];
 $gpx_files_logs = [];
 $trajetorias_por_voo = [];
+$controle_usado = null;
 
 if ($missao_id <= 0) {
     header("Location: listar_missoes.php");
     exit();
 }
 
-// 1. BUSCA OS DETALHES GERAIS DA MISSÃO
+// 1. BUSCA OS DETALHES GERAIS DA MISSÃO E OBM DA AERONAVE
 $sql_details = "
     SELECT 
-        m.id, m.data_ocorrencia, m.tipo_ocorrencia, m.rgo_ocorrencia, 
+        m.id, m.aeronave_id, m.data_ocorrencia, m.tipo_ocorrencia, m.protocolo_sarpas, m.rgo_ocorrencia, 
         m.dados_vitima, m.altitude_maxima, m.total_distancia_percorrida, m.total_tempo_voo, 
         m.data_primeira_decolagem, m.data_ultimo_pouso,
-        a.prefixo AS aeronave_prefixo, a.modelo AS aeronave_modelo
+        a.prefixo AS aeronave_prefixo, a.modelo AS aeronave_modelo, a.obm AS aeronave_obm
     FROM missoes m
     JOIN aeronaves a ON m.aeronave_id = a.id
     WHERE m.id = ?
@@ -29,25 +30,45 @@ $stmt_details->execute();
 $result_details = $stmt_details->get_result();
 if ($result_details->num_rows === 1) {
     $missao_details = $result_details->fetch_assoc();
+    
+    // Busca o controle vinculado à aeronave da missão
+    $stmt_controle = $conn->prepare("SELECT modelo, numero_serie FROM controles WHERE aeronave_id = ?");
+    $stmt_controle->bind_param("i", $missao_details['aeronave_id']);
+    $stmt_controle->execute();
+    $result_controle = $stmt_controle->get_result();
+    if($result_controle->num_rows > 0){
+        $controle_usado = $result_controle->fetch_assoc();
+    }
+    $stmt_controle->close();
+
 } else {
     header("Location: listar_missoes.php");
     exit();
 }
 $stmt_details->close();
 
-// 2. BUSCA OS PILOTOS ENVOLVIDOS NA MISSÃO (COM ORDENAÇÃO)
+// 2. BUSCA OS PILOTOS ENVOLVIDOS COM ORDENAÇÃO POR HIERARQUIA
 $sql_pilotos = "
     SELECT p.posto_graduacao, p.nome_completo 
-    FROM pilotos p 
-    JOIN missoes_pilotos mp ON p.id = mp.piloto_id 
+    FROM missoes_pilotos mp
+    JOIN pilotos p ON mp.piloto_id = p.id 
     WHERE mp.missao_id = ?
     ORDER BY
         CASE p.posto_graduacao
-            WHEN 'Cel. QOBM' THEN 1 WHEN 'Ten. Cel. QOBM' THEN 2 WHEN 'Maj. QOBM' THEN 3
-            WHEN 'Cap. QOBM' THEN 4 WHEN '1º Ten. QOBM' THEN 5 WHEN '2º Ten. QOBM' THEN 6
-            WHEN 'Asp. Oficial' THEN 7 WHEN 'Sub. Ten. QPBM' THEN 8 WHEN '1º Sgt. QPBM' THEN 9
-            WHEN '2º Sgt. QPBM' THEN 10 WHEN '3º Sgt. QPBM' THEN 11 WHEN 'Cb. QPBM' THEN 12
-            WHEN 'Sd. QPBM' THEN 13 ELSE 14
+            WHEN 'Cel. QOBM' THEN 1
+            WHEN 'Ten. Cel. QOBM' THEN 2
+            WHEN 'Maj. QOBM' THEN 3
+            WHEN 'Cap. QOBM' THEN 4
+            WHEN '1º Ten. QOBM' THEN 5
+            WHEN '2º Ten. QOBM' THEN 6
+            WHEN 'Asp. Oficial' THEN 7
+            WHEN 'Sub. Ten. QPBM' THEN 8
+            WHEN '1º Sgt. QPBM' THEN 9
+            WHEN '2º Sgt. QPBM' THEN 10
+            WHEN '3º Sgt. QPBM' THEN 11
+            WHEN 'Cb. QPBM' THEN 12
+            WHEN 'Sd. QPBM' THEN 13
+            ELSE 14
         END
 ";
 $stmt_pilotos = $conn->prepare($sql_pilotos);
@@ -55,37 +76,42 @@ $stmt_pilotos->bind_param("i", $missao_id);
 $stmt_pilotos->execute();
 $result_pilotos = $stmt_pilotos->get_result();
 while ($row = $result_pilotos->fetch_assoc()) {
-    $pilotos_envolvidos[] = $row;
+    $pilotos_envolvidos[] = $row['posto_graduacao'] . ' ' . $row['nome_completo'];
 }
 $stmt_pilotos->close();
 
-// 3. BUSCA OS DADOS DE CADA VOO INDIVIDUAL (GPX) E SUAS COORDENADAS
-$sql_gpx = "SELECT id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso FROM missoes_gpx_files WHERE missao_id = ? ORDER BY data_decolagem ASC";
+
+// 3. BUSCA OS LOGS DOS ARQUIVOS GPX E AS COORDENADAS PARA O MAPA
+$sql_gpx = "SELECT id, file_name, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso FROM missoes_gpx_files WHERE missao_id = ?";
 $stmt_gpx = $conn->prepare($sql_gpx);
 $stmt_gpx->bind_param("i", $missao_id);
 $stmt_gpx->execute();
 $result_gpx = $stmt_gpx->get_result();
-while ($gpx_log = $result_gpx->fetch_assoc()) {
-    $gpx_files_logs[] = $gpx_log;
 
-    $pontos_do_voo = [];
-    $stmt_coords = $conn->prepare("SELECT longitude, latitude FROM missao_coordenadas WHERE gpx_file_id = ? ORDER BY timestamp_ponto ASC");
-    $stmt_coords->bind_param("i", $gpx_log['id']);
+$sql_coords = "SELECT latitude, longitude FROM missao_coordenadas WHERE gpx_file_id = ? ORDER BY timestamp_ponto ASC";
+$stmt_coords = $conn->prepare($sql_coords);
+
+while ($gpx_file = $result_gpx->fetch_assoc()) {
+    $gpx_files_logs[] = $gpx_file;
+    
+    $gpx_file_id = $gpx_file['id'];
+    $stmt_coords->bind_param("i", $gpx_file_id);
     $stmt_coords->execute();
     $result_coords = $stmt_coords->get_result();
-    while ($coord_row = $result_coords->fetch_assoc()) {
-        $pontos_do_voo[] = [(float)$coord_row['longitude'], (float)$coord_row['latitude']];
-    }
-    $stmt_coords->close();
     
-    if (!empty($pontos_do_voo)) {
-        $trajetorias_por_voo[] = $pontos_do_voo;
+    $trajetoria_atual = [];
+    while ($coord = $result_coords->fetch_assoc()) {
+        // MapBox espera [longitude, latitude]
+        $trajetoria_atual[] = [(float)$coord['longitude'], (float)$coord['latitude']];
+    }
+    if (!empty($trajetoria_atual)) {
+        $trajetorias_por_voo[] = $trajetoria_atual;
     }
 }
 $stmt_gpx->close();
+$stmt_coords->close();
 
-$coresDasRotas = ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f', '#337ab7'];
-
+// Funções de formatação
 function formatarTempoVooCompleto($segundos) {
     if ($segundos <= 0) return '0min';
     $horas = floor($segundos / 3600);
@@ -104,18 +130,24 @@ function formatarDistancia($metros) {
     }
 }
 ?>
+
 <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
 <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
 
+<style>
+    .details-fieldset { border: 1px solid #ccc; border-radius: 5px; padding: 20px; margin-bottom: 25px; }
+    .details-fieldset legend { font-weight: bold; color: #2c3e50; padding: 0 10px; }
+    .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+    .detail-item { background-color: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #3498db; }
+    .detail-item strong { display: block; color: #555; margin-bottom: 5px; font-size: 0.9em; }
+    .detail-item p, .detail-item ul { margin: 0; padding: 0; color: #333; font-size: 1.1em; }
+    .detail-item ul { list-style-position: inside; }
+</style>
+
 <div class="main-content">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;" class="no-print">
-        <h1>Detalhes da Missão <?php echo htmlspecialchars(!empty($missao_details['rgo_ocorrencia']) ? $missao_details['rgo_ocorrencia'] : '#' . $missao_id); ?></h1>
-        <div>
-            <button onclick="window.print()" style="padding: 8px 12px; font-size: 14px; cursor: pointer; border: 1px solid #ccc; background-color: #f0f0f0; border-radius: 5px; margin-right: 15px;">
-                <i class="fas fa-print"></i> Imprimir
-            </button>
-            <a href="listar_missoes.php" style="text-decoration: none; color: #555;"><i class="fas fa-arrow-left"></i> Voltar para a Lista</a>
-        </div>
+        <h1>Detalhes da Missão <?php echo !empty($missao_details['rgo_ocorrencia']) ? 'RGO ' . htmlspecialchars($missao_details['rgo_ocorrencia']) : '#' . $missao_id; ?></h1>
+        <button onclick="window.print();" style="padding: 10px 15px; cursor: pointer;">Imprimir</button>
     </div>
 
     <div class="form-container">
@@ -123,22 +155,29 @@ function formatarDistancia($metros) {
             
             <fieldset class="details-fieldset">
                 <legend>Mapa da Trajetória</legend>
-                <div id='map' style='width: 100%; height: 400px; border-radius: 5px;'></div>
+                <div id='map' style='width: 100%; height: 450px; border-radius: 5px; background-color: #e9ecef;'></div>
             </fieldset>
 
             <fieldset class="details-fieldset">
                 <legend>Detalhes da Ocorrência</legend>
                 <div class="details-grid">
-                    <div class="detail-item"><strong>Aeronave:</strong><p><?php echo htmlspecialchars($missao_details['aeronave_prefixo'] . ' - ' . $missao_details['aeronave_modelo']); ?></p></div>
+                    <div class="detail-item"><strong>Aeronave:</strong><p><?php echo htmlspecialchars($missao_details['aeronave_prefixo'] . ' - ' . $missao_details['aeronave_modelo']); ?> (<?php echo htmlspecialchars($missao_details['aeronave_obm']); ?>)</p></div>
+                    <div class="detail-item"><strong>Controle:</strong><p><?php echo $controle_usado ? htmlspecialchars($controle_usado['modelo'] . ' - S/N: ' . $controle_usado['numero_serie']) : 'Não informado'; ?></p></div>
                     <div class="detail-item"><strong>Data da Ocorrência:</strong><p><?php echo date("d/m/Y", strtotime($missao_details['data_ocorrencia'])); ?></p></div>
                     <div class="detail-item"><strong>Tipo de Ocorrência:</strong><p><?php echo htmlspecialchars($missao_details['tipo_ocorrencia']); ?></p></div>
+                    <div class="detail-item"><strong>Protocolo SARPAS:</strong><p><?php echo htmlspecialchars($missao_details['protocolo_sarpas'] ?? 'Não informado'); ?></p></div>
                     <div class="detail-item"><strong>Nº RGO:</strong><p><?php echo htmlspecialchars($missao_details['rgo_ocorrencia'] ?? 'Não informado'); ?></p></div>
-                    <div class="detail-item" style="grid-column: 1 / -1;"><strong>Piloto(s) Envolvido(s):</strong>
-                        <ul style="margin: 0; padding-left: 20px;">
-                            <?php foreach($pilotos_envolvidos as $piloto): ?>
-                                <li><?php echo htmlspecialchars($piloto['posto_graduacao'] . ' ' . $piloto['nome_completo']); ?></li>
-                            <?php endforeach; ?>
-                        </ul>
+                    <div class="detail-item" style="grid-column: 1 / -1;">
+                        <strong>Piloto(s) Envolvido(s):</strong>
+                        <?php if (empty($pilotos_envolvidos)): ?>
+                            <p>Nenhum piloto associado.</p>
+                        <?php else: ?>
+                            <ul style="list-style-type: none;">
+                                <?php foreach ($pilotos_envolvidos as $piloto): ?>
+                                    <li><?php echo htmlspecialchars($piloto); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
                     </div>
                     <div class="detail-item" style="grid-column: 1 / -1;"><strong>Dados da Vítima/Alvo:</strong><p style="white-space: pre-wrap;"><?php echo htmlspecialchars($missao_details['dados_vitima'] ?? 'Não informado'); ?></p></div>
                 </div>
@@ -146,33 +185,27 @@ function formatarDistancia($metros) {
 
             <fieldset class="details-fieldset">
                 <legend>Logs de Voo Individuais</legend>
-                <div class="table-container" style="padding: 0; box-shadow: none;">
+                <div class="table-container" style="padding:0; box-shadow: none;">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Voo</th>
                                 <th>Ficheiro GPX</th>
                                 <th>Decolagem</th>
                                 <th>Pouso</th>
                                 <th>Duração</th>
                                 <th>Distância</th>
                                 <th>Altura Máx.</th>
-                                <th>Mapa</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($gpx_files_logs as $index => $log): ?>
+                            <?php foreach ($gpx_files_logs as $log): ?>
                             <tr>
-                                <td><?php echo $index + 1; ?></td>
-                                <td style="text-align: left;"><?php echo htmlspecialchars($log['file_name']); ?></td>
+                                <td><?php echo htmlspecialchars($log['file_name']); ?></td>
                                 <td><?php echo date("d/m/Y H:i:s", strtotime($log['data_decolagem'])); ?></td>
                                 <td><?php echo date("d/m/Y H:i:s", strtotime($log['data_pouso'])); ?></td>
                                 <td><?php echo formatarTempoVooCompleto($log['tempo_voo']); ?></td>
                                 <td><?php echo formatarDistancia($log['distancia_percorrida']); ?></td>
-                                <td><?php echo round($log['altura_maxima'], 1); ?> m</td>
-                                <td>
-                                    <span style="display: inline-block; width: 15px; height: 15px; background-color: <?php echo $coresDasRotas[$index % count($coresDasRotas)]; ?>; border: 1px solid #ccc; border-radius: 3px;"></span>
-                                </td>
+                                <td><?php echo round($log['altura_maxima'], 2); ?> m</td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -181,7 +214,7 @@ function formatarDistancia($metros) {
             </fieldset>
 
             <fieldset class="details-fieldset">
-                <legend>Log Total da Missão</legend>
+                <legend>Log Total Consolidado da Missão</legend>
                  <div class="details-grid">
                     <div class="detail-item"><strong>Primeira Decolagem:</strong><p><?php echo date("d/m/Y H:i", strtotime($missao_details['data_primeira_decolagem'])); ?></p></div>
                     <div class="detail-item"><strong>Último Pouso:</strong><p><?php echo date("d/m/Y H:i", strtotime($missao_details['data_ultimo_pouso'])); ?></p></div>
@@ -199,31 +232,25 @@ function formatarDistancia($metros) {
     </div>
 </div>
 
-<style>
-    .details-fieldset { border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 25px; }
-    .details-fieldset legend { font-weight: 700; color: #34495e; padding: 0 10px; font-size: 1.2em; }
-    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .detail-item { background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; }
-    .detail-item strong { display: block; margin-bottom: 8px; color: #555; font-size: 0.9em; }
-    .detail-item p { margin: 0; font-size: 1.1em; color: #333; }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const todasAsTrajetorias = <?php echo json_encode($trajetorias_por_voo); ?>;
-    const coresDasRotas = <?php echo json_encode($coresDasRotas); ?>;
-
-    if (todasAsTrajetorias && todasAsTrajetorias.length > 0) {
+    
+    if (todasAsTrajetorias && todasAsTrajetorias.length > 0 && todasAsTrajetorias[0].length > 0) {
+        
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2d0ZGlhcyIsImEiOiJjbWQyczc0ZnIwZWJ1MmlvZWc1ZHNpMTZyIn0.DD-OVrx3pBjx2cQjMCtyOQ'; 
         
         const map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/mapbox/satellite-streets-v11',
-            center: todasAsTrajetorias[0][Math.floor(todasAsTrajetorias[0].length / 2)],
+            center: todasAsTrajetorias[0][0],
             zoom: 15
         });
 
+        map.addControl(new mapboxgl.NavigationControl());
+
         const bounds = new mapboxgl.LngLatBounds();
+        const colors = ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f', '#337ab7'];
 
         map.on('load', () => {
             todasAsTrajetorias.forEach((trajetoria, index) => {
@@ -249,18 +276,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     'source': sourceId,
                     'layout': { 'line-join': 'round', 'line-cap': 'round' },
                     'paint': {
-                        'line-color': coresDasRotas[index % coresDasRotas.length],
+                        'line-color': colors[index % colors.length],
                         'line-width': 4,
                         'line-opacity': 0.8
                     }
                 });
-
-                new mapboxgl.Marker({ color: '#5cb85c' })
+                
+                new mapboxgl.Marker({ color: '#28a745' })
                     .setLngLat(trajetoria[0])
                     .setPopup(new mapboxgl.Popup().setText(`Início do Voo ${index + 1}`))
                     .addTo(map);
 
-                new mapboxgl.Marker({ color: '#d9534f' })
+                new mapboxgl.Marker({ color: '#dc3545' })
                     .setLngLat(trajetoria[trajetoria.length - 1])
                     .setPopup(new mapboxgl.Popup().setText(`Fim do Voo ${index + 1}`))
                     .addTo(map);
@@ -268,13 +295,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 trajetoria.forEach(coord => bounds.extend(coord));
             });
             
-            map.fitBounds(bounds, {
-                padding: { top: 50, bottom: 50, left: 50, right: 50 }
-            });
+            if (!bounds.isEmpty()) {
+                map.fitBounds(bounds, {
+                    padding: { top: 50, bottom: 50, left: 50, right: 50 }
+                });
+            }
         });
 
     } else {
-        document.getElementById('map').innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum dado de trajetória para exibir no mapa.</p>';
+        document.getElementById('map').innerHTML = '<p style="text-align:center; padding: 20px;">Não há dados de trajetória para exibir no mapa.</p>';
     }
 });
 </script>

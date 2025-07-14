@@ -67,8 +67,15 @@ if ($isAdmin) {
 }
 ?>
 
+<style>
+@media (max-width: 768px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+    .table-container::after { content: '◄ Arraste para ver mais ►'; display: block; text-align: center; font-size: 0.8em; color: #999; margin-top: 10px; }
+}
+</style>
+
 <div class="main-content">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h1>Histórico de Manutenções</h1>
         <a href="cadastro_manutencao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px;">
             <i class="fas fa-plus"></i> Registrar Nova Manutenção

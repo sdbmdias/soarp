@@ -87,7 +87,7 @@ if ($result_modelos->num_rows > 0) {
                     <label for="modelo">Nome do Modelo:</label>
                     <input type="text" id="modelo" name="modelo" placeholder="Ex: Mavic 3T, RC Pro" required>
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="grid-column: 1 / -1;">
                     <label for="tipo">Tipo de Equipamento:</label>
                     <select id="tipo" name="tipo" required>
                         <option value="">Selecione o Tipo</option>
@@ -121,7 +121,7 @@ if ($result_modelos->num_rows > 0) {
                             <td><?php echo htmlspecialchars($item['modelo']); ?></td>
                             <td><?php echo date("d/m/Y", strtotime($item['data_registro'])); ?></td>
                             <td class="action-buttons">
-                                <a href="cadastro_modelos.php?delete_id=<?php echo $item['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir este modelo?');">Excluir</a>
+                                <a href="cadastro_modelos.php?delete_id=<?php echo $item['id']; ?>" class="edit-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir este modelo?');">Excluir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -153,7 +153,7 @@ if ($result_modelos->num_rows > 0) {
                             <td><?php echo htmlspecialchars($item['modelo']); ?></td>
                             <td><?php echo date("d/m/Y", strtotime($item['data_registro'])); ?></td>
                             <td class="action-buttons">
-                                <a href="cadastro_modelos.php?delete_id=<?php echo $item['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir este modelo?');">Excluir</a>
+                                <a href="cadastro_modelos.php?delete_id=<?php echo $item['id']; ?>" class="edit-btn" style="background-color:#dc3545;" onclick="return confirm('Tem certeza que deseja excluir este modelo?');">Excluir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
