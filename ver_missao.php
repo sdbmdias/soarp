@@ -5,7 +5,7 @@ $missao_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $missao_details = null;
 $pilotos_envolvidos = [];
 $gpx_files_logs = [];
-$trajetoria_pontos = []; // Array para guardar os pontos do mapa
+$trajetorias_por_voo = [];
 
 if ($missao_id <= 0) {
     header("Location: listar_missoes.php");
@@ -59,30 +59,33 @@ while ($row = $result_pilotos->fetch_assoc()) {
 }
 $stmt_pilotos->close();
 
-// 3. BUSCA OS DADOS DE CADA VOO INDIVIDUAL (GPX)
-$sql_gpx = "SELECT * FROM missoes_gpx_files WHERE missao_id = ? ORDER BY data_decolagem ASC";
+// 3. BUSCA OS DADOS DE CADA VOO INDIVIDUAL (GPX) E SUAS COORDENADAS
+$sql_gpx = "SELECT id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso FROM missoes_gpx_files WHERE missao_id = ? ORDER BY data_decolagem ASC";
 $stmt_gpx = $conn->prepare($sql_gpx);
 $stmt_gpx->bind_param("i", $missao_id);
 $stmt_gpx->execute();
 $result_gpx = $stmt_gpx->get_result();
-while ($row = $result_gpx->fetch_assoc()) {
-    $gpx_files_logs[] = $row;
+while ($gpx_log = $result_gpx->fetch_assoc()) {
+    $gpx_files_logs[] = $gpx_log;
 
-    // 4. BUSCA AS COORDENADAS PARA O MAPA
+    $pontos_do_voo = [];
     $stmt_coords = $conn->prepare("SELECT longitude, latitude FROM missao_coordenadas WHERE gpx_file_id = ? ORDER BY timestamp_ponto ASC");
-    $stmt_coords->bind_param("i", $row['id']);
+    $stmt_coords->bind_param("i", $gpx_log['id']);
     $stmt_coords->execute();
     $result_coords = $stmt_coords->get_result();
     while ($coord_row = $result_coords->fetch_assoc()) {
-        // Formata para [longitude, latitude] que é o padrão do GeoJSON
-        $trajetoria_pontos[] = [(float)$coord_row['longitude'], (float)$coord_row['latitude']];
+        $pontos_do_voo[] = [(float)$coord_row['longitude'], (float)$coord_row['latitude']];
     }
     $stmt_coords->close();
+    
+    if (!empty($pontos_do_voo)) {
+        $trajetorias_por_voo[] = $pontos_do_voo;
+    }
 }
 $stmt_gpx->close();
 
+$coresDasRotas = ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f', '#337ab7'];
 
-// Funções de formatação
 function formatarTempoVooCompleto($segundos) {
     if ($segundos <= 0) return '0min';
     $horas = floor($segundos / 3600);
@@ -105,9 +108,14 @@ function formatarDistancia($metros) {
 <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
 
 <div class="main-content">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;" class="no-print">
         <h1>Detalhes da Missão <?php echo htmlspecialchars(!empty($missao_details['rgo_ocorrencia']) ? $missao_details['rgo_ocorrencia'] : '#' . $missao_id); ?></h1>
-        <a href="listar_missoes.php" style="text-decoration: none; color: #555;"><i class="fas fa-arrow-left"></i> Voltar para a Lista de Missões</a>
+        <div>
+            <button onclick="window.print()" style="padding: 8px 12px; font-size: 14px; cursor: pointer; border: 1px solid #ccc; background-color: #f0f0f0; border-radius: 5px; margin-right: 15px;">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <a href="listar_missoes.php" style="text-decoration: none; color: #555;"><i class="fas fa-arrow-left"></i> Voltar para a Lista</a>
+        </div>
     </div>
 
     <div class="form-container">
@@ -142,27 +150,29 @@ function formatarDistancia($metros) {
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th>Voo</th>
                                 <th>Ficheiro GPX</th>
                                 <th>Decolagem</th>
                                 <th>Pouso</th>
                                 <th>Duração</th>
                                 <th>Distância</th>
                                 <th>Altura Máx.</th>
+                                <th>Mapa</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($gpx_files_logs as $log): ?>
+                            <?php foreach ($gpx_files_logs as $index => $log): ?>
                             <tr>
-                                <td style="text-align: left;">
-                                    <a href="<?php echo htmlspecialchars($log['file_path']); ?>" download title="Descarregar Ficheiro Original">
-                                        <i class="fas fa-file-code"></i> <?php echo htmlspecialchars($log['file_name']); ?>
-                                    </a>
-                                </td>
+                                <td><?php echo $index + 1; ?></td>
+                                <td style="text-align: left;"><?php echo htmlspecialchars($log['file_name']); ?></td>
                                 <td><?php echo date("d/m/Y H:i:s", strtotime($log['data_decolagem'])); ?></td>
                                 <td><?php echo date("d/m/Y H:i:s", strtotime($log['data_pouso'])); ?></td>
                                 <td><?php echo formatarTempoVooCompleto($log['tempo_voo']); ?></td>
                                 <td><?php echo formatarDistancia($log['distancia_percorrida']); ?></td>
                                 <td><?php echo round($log['altura_maxima'], 1); ?> m</td>
+                                <td>
+                                    <span style="display: inline-block; width: 15px; height: 15px; background-color: <?php echo $coresDasRotas[$index % count($coresDasRotas)]; ?>; border: 1px solid #ccc; border-radius: 3px;"></span>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -196,86 +206,78 @@ function formatarDistancia($metros) {
     .detail-item { background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; }
     .detail-item strong { display: block; margin-bottom: 8px; color: #555; font-size: 0.9em; }
     .detail-item p { margin: 0; font-size: 1.1em; color: #333; }
-    .data-table td a { color: #007bff; text-decoration: none; }
-    .data-table td a:hover { text-decoration: underline; }
-    .data-table td i { margin-right: 5px; }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const trajetoria = <?php echo json_encode($trajetoria_pontos); ?>;
+    const todasAsTrajetorias = <?php echo json_encode($trajetorias_por_voo); ?>;
+    const coresDasRotas = <?php echo json_encode($coresDasRotas); ?>;
 
-    if (trajetoria && trajetoria.length > 1) {
-        mapboxgl.accessToken = 'pk.eyJ1Ijoic2d0ZGlhcyIsImEiOiJjbWQyczc0ZnIwZWJ1MmlvZWc1ZHNpMTZyIn0.DD-OVrx3pBjx2cQjMCtyOQ'; // <-- SUBSTITUA PELA SUA CHAVE
+    if (todasAsTrajetorias && todasAsTrajetorias.length > 0) {
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2d0ZGlhcyIsImEiOiJjbWQyczc0ZnIwZWJ1MmlvZWc1ZHNpMTZyIn0.DD-OVrx3pBjx2cQjMCtyOQ'; 
+        
         const map = new mapboxgl.Map({
             container: 'map',
-            style: 'mapbox://styles/mapbox/satellite-streets-v11', // Estilo do mapa
-            center: trajetoria[Math.floor(trajetoria.length / 2)], // Centraliza no meio da rota
+            style: 'mapbox://styles/mapbox/satellite-streets-v11',
+            center: todasAsTrajetorias[0][Math.floor(todasAsTrajetorias[0].length / 2)],
             zoom: 15
         });
 
+        const bounds = new mapboxgl.LngLatBounds();
+
         map.on('load', () => {
-            // Adiciona a fonte de dados (a rota do voo)
-            map.addSource('route', {
-                'type': 'geojson',
-                'data': {
-                    'type': 'Feature',
-                    'properties': {},
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': trajetoria
+            todasAsTrajetorias.forEach((trajetoria, index) => {
+                if (trajetoria.length < 2) return;
+
+                const sourceId = `route-${index}`;
+                const layerId = `line-${index}`;
+                
+                map.addSource(sourceId, {
+                    'type': 'geojson',
+                    'data': {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'LineString',
+                            'coordinates': trajetoria
+                        }
                     }
-                }
+                });
+
+                map.addLayer({
+                    'id': layerId,
+                    'type': 'line',
+                    'source': sourceId,
+                    'layout': { 'line-join': 'round', 'line-cap': 'round' },
+                    'paint': {
+                        'line-color': coresDasRotas[index % coresDasRotas.length],
+                        'line-width': 4,
+                        'line-opacity': 0.8
+                    }
+                });
+
+                new mapboxgl.Marker({ color: '#5cb85c' })
+                    .setLngLat(trajetoria[0])
+                    .setPopup(new mapboxgl.Popup().setText(`Início do Voo ${index + 1}`))
+                    .addTo(map);
+
+                new mapboxgl.Marker({ color: '#d9534f' })
+                    .setLngLat(trajetoria[trajetoria.length - 1])
+                    .setPopup(new mapboxgl.Popup().setText(`Fim do Voo ${index + 1}`))
+                    .addTo(map);
+
+                trajetoria.forEach(coord => bounds.extend(coord));
             });
-
-            // Adiciona a camada para desenhar a linha da rota
-            map.addLayer({
-                'id': 'route',
-                'type': 'line',
-                'source': 'route',
-                'layout': {
-                    'line-join': 'round',
-                    'line-cap': 'round'
-                },
-                'paint': {
-                    'line-color': '#f0ad4e', // Cor da linha (laranja)
-                    'line-width': 4
-                }
-            });
-
-            // Adiciona marcador de início
-            new mapboxgl.Marker({ color: '#5cb85c' }) // Verde
-                .setLngLat(trajetoria[0])
-                .setPopup(new mapboxgl.Popup().setText('Início da Missão'))
-                .addTo(map);
-
-            // Adiciona marcador de fim
-            new mapboxgl.Marker({ color: '#d9534f' }) // Vermelho
-                .setLngLat(trajetoria[trajetoria.length - 1])
-                .setPopup(new mapboxgl.Popup().setText('Fim da Missão'))
-                .addTo(map);
             
-            // Ajusta o mapa para mostrar toda a rota
-            const bounds = new mapboxgl.LngLatBounds(
-                trajetoria[0],
-                trajetoria[0]
-            );
-
-            for (const coord of trajetoria) {
-                bounds.extend(coord);
-            }
-
             map.fitBounds(bounds, {
-                padding: {top: 50, bottom:50, left: 50, right: 50}
+                padding: { top: 50, bottom: 50, left: 50, right: 50 }
             });
         });
+
     } else {
-        // Se não houver coordenadas, exibe uma mensagem no lugar do mapa
         document.getElementById('map').innerHTML = '<p style="text-align:center; padding: 20px;">Nenhum dado de trajetória para exibir no mapa.</p>';
     }
 });
 </script>
-
 
 <?php
 require_once 'includes/footer.php';

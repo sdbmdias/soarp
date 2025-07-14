@@ -66,7 +66,7 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .sidebar ul li .submenu{list-style:none;padding:0;max-height:0;overflow:hidden;transition:max-height .3s ease-out;background-color:#34495e}
         .sidebar ul li .submenu li a{padding:10px 20px 10px 45px;font-size:.95em;background-color:transparent}
         .sidebar ul li .submenu li a:hover,.sidebar ul li .submenu li a.active{background-color:#3f5872;border-left:5px solid #3498db}
-        .sidebar ul li .submenu.open{max-height:400px} /* Aumentado para caber mais itens */
+        .sidebar ul li .submenu.open{max-height:400px}
 
         .main-content{flex-grow:1;padding:30px;background-color:#f0f2f5;color:#333}
         .main-content h1{color:#2c3e50;margin-bottom:20px}
@@ -112,7 +112,6 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         .action-buttons a{display:inline-block;padding:5px 10px;margin-right:5px;border-radius:4px;text-decoration:none;color:#fff;font-size:.85em}
         .action-buttons .edit-btn{background-color:#007bff}
 
-        /* --- Estilos Padronizados para Status --- */
         .status-ativo { color: #28a745; font-weight: 700; }
         .status-em_manutencao, .status-afastado { color: #ffc107; font-weight: 700; }
         .status-baixada, .status-desativado { color: #dc3545; font-weight: 700; }
@@ -130,6 +129,26 @@ if ($isAdmin) { // Apenas administradores veem os alertas no menu
         }
         .user-role-display p { margin: 0; }
         .user-role-display strong { color: #fff; font-size: 15px; }
+
+        /* ### ESTILO PARA IMPRESSÃO ### */
+        @media print {
+            body {
+                display: block; /* Remove o flexbox para impressão */
+            }
+            .sidebar, .no-print {
+                display: none !important; /* Oculta o menu lateral e qualquer outro elemento com a classe no-print */
+            }
+            .main-content {
+                width: 100%;
+                padding: 0;
+                margin: 0;
+            }
+            .form-container {
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
+        }
+
     </style>
 </head>
 <body>
