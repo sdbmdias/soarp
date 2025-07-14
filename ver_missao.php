@@ -50,6 +50,7 @@ while ($row = $result_pilotos->fetch_assoc()) {
 }
 $stmt_pilotos->close();
 
+
 // 3. BUSCA OS DADOS DE CADA VOO INDIVIDUAL (GPX)
 $sql_gpx = "SELECT * FROM missoes_gpx_files WHERE missao_id = ? ORDER BY data_decolagem ASC";
 $stmt_gpx = $conn->prepare($sql_gpx);

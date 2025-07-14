@@ -2,6 +2,7 @@
 require_once 'includes/header.php';
 require_once 'gpx_parser.php';
 
+// Apenas administradores podem aceder a esta página
 if (!$isAdmin) {
     header("Location: listar_missoes.php");
     exit();
@@ -18,7 +19,7 @@ if ($missao_id <= 0) {
 }
 
 // LÓGICA DE ATUALIZAÇÃO DA MISSÃO
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pilotos']) && !empty($_POST['pilotos'])) {
     $conn->begin_transaction();
     try {
         $stmt_old_data = $conn->prepare("SELECT aeronave_id, total_distancia_percorrida, total_tempo_voo, altitude_maxima, data_primeira_decolagem, data_ultimo_pouso FROM missoes WHERE id = ?");
@@ -102,7 +103,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt_update->execute();
         $stmt_update->close();
         
-        // Apaga as associações de pilotos antigas e insere as novas
         $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
         $stmt_delete_pilots->bind_param("i", $missao_id);
         $stmt_delete_pilots->execute();
@@ -110,7 +110,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         $stmt_pilotos_assoc = $conn->prepare("INSERT INTO missoes_pilotos (missao_id, piloto_id) VALUES (?, ?)");
         foreach ($pilotos_selecionados as $piloto_id) {
-            $stmt_pilotos_assoc->bind_param("ii", $missao_id, $piloto_id);
+            $stmt_pilotos_assoc->bind_param("ii", $missao_id, intval($piloto_id));
             $stmt_pilotos_assoc->execute();
         }
         $stmt_pilotos_assoc->close();
@@ -129,7 +129,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 
-// --- CARREGAR DADOS DA MISSÃO PARA PREENCHER O FORMULÁRIO ---
+// CARREGAR DADOS DA MISSÃO PARA PREENCHER O FORMULÁRIO
 $stmt_load = $conn->prepare("SELECT * FROM missoes WHERE id = ?");
 $stmt_load->bind_param("i", $missao_id);
 $stmt_load->execute();
@@ -137,7 +137,6 @@ $result_load = $stmt_load->get_result();
 if ($result_load->num_rows === 1) {
     $missao_data = $result_load->fetch_assoc();
     
-    // Carrega os IDs dos pilotos já associados a esta missão
     $stmt_pilots = $conn->prepare("SELECT piloto_id FROM missoes_pilotos WHERE missao_id = ?");
     $stmt_pilots->bind_param("i", $missao_id);
     $stmt_pilots->execute();
@@ -146,7 +145,6 @@ if ($result_load->num_rows === 1) {
         $pilotos_associados_ids[] = $row['piloto_id'];
     }
     $stmt_pilots->close();
-
 } else {
     $mensagem_status = "<div class='error-message-box'>Missão não encontrada.</div>";
 }

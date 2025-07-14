@@ -29,6 +29,12 @@ if ($isAdmin && isset($_GET['delete_id'])) {
             }
             $stmt_get_files->close();
 
+            // Apaga as associações de pilotos antes de apagar a missão
+            $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
+            $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
+            $stmt_delete_pilots->execute();
+            $stmt_delete_pilots->close();
+
             $stmt_delete_mission = $conn->prepare("DELETE FROM missoes WHERE id = ?");
             $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_mission->execute();
@@ -50,6 +56,7 @@ if ($isAdmin && isset($_GET['delete_id'])) {
     }
 }
 
+
 // --- LÓGICA PARA BUSCAR AS MISSÕES COM MÚLTIPLOS PILOTOS ---
 $missoes = [];
 $sql_missoes = "
@@ -59,8 +66,8 @@ $sql_missoes = "
         GROUP_CONCAT(CONCAT(p.posto_graduacao, ' ', p.nome_completo) SEPARATOR '<br>') AS pilotos_nomes
     FROM missoes m
     JOIN aeronaves a ON m.aeronave_id = a.id
-    JOIN missoes_pilotos mp ON m.id = mp.missao_id
-    JOIN pilotos p ON mp.piloto_id = p.id
+    LEFT JOIN missoes_pilotos mp ON m.id = mp.missao_id
+    LEFT JOIN pilotos p ON mp.piloto_id = p.id
     GROUP BY m.id
     ORDER BY m.data_ocorrencia DESC, m.id DESC
 ";
@@ -110,7 +117,7 @@ function formatarTempoVoo($segundos) {
                         <tr>
                             <td><?php echo date("d/m/Y", strtotime($missao['data_ocorrencia'])); ?></td>
                             <td><?php echo htmlspecialchars($missao['aeronave_prefixo']); ?></td>
-                            <td style="text-align: left;"><?php echo $missao['pilotos_nomes']; ?></td>
+                            <td style="text-align: left;"><?php echo $missao['pilotos_nomes'] ?? 'Nenhum piloto associado'; ?></td>
                             <td style="text-align: left;">
                                 <strong><?php echo htmlspecialchars($missao['rgo_ocorrencia'] ?? 'MISSÃO SEM RGO'); ?></strong><br>
                                 <small><?php echo htmlspecialchars($missao['tipo_ocorrencia']); ?></small>
