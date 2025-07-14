@@ -27,6 +27,8 @@ if ($result_unidades) {
 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Coleta dos dados do formulário
+    $posto_graduacao = htmlspecialchars($_POST['posto_graduacao']);
     $nome_completo = htmlspecialchars($_POST['nome_completo']);
     $rg = htmlspecialchars($_POST['rg']);
     $cpf = htmlspecialchars($_POST['cpf']);
@@ -44,8 +46,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $senha_redefinida = 0;
     $senha_hashed = password_hash($senha, PASSWORD_DEFAULT);
 
-    $stmt = $conn->prepare("INSERT INTO pilotos (nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, senha, tipo_usuario, senha_redefinida) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssssssssssi", $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $senha_hashed, $tipo_usuario, $senha_redefinida);
+    // Atualiza a instrução SQL para incluir o novo campo
+    $stmt = $conn->prepare("INSERT INTO pilotos (posto_graduacao, nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, senha, tipo_usuario, senha_redefinida) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssssssssi", $posto_graduacao, $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $senha_hashed, $tipo_usuario, $senha_redefinida);
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Piloto cadastrado com sucesso!</div>";
@@ -63,12 +66,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     <div class="form-container">
         <form id="pilotoForm" action="cadastro_pilotos.php" method="POST">
-            <div class="form-grid">
-                <div class="form-group">
+            <div class="form-grid-piloto">
+                <div class="form-group" style="grid-column: 1 / 2;">
+                    <label for="posto_graduacao">Posto/Graduação:</label>
+                    <select id="posto_graduacao" name="posto_graduacao" required>
+                        <option value="">Selecione...</option>
+                        <option value="Cel. QOBM">Cel. QOBM</option>
+                        <option value="Ten. Cel. QOBM">Ten. Cel. QOBM</option>
+                        <option value="Maj. QOBM">Maj. QOBM</option>
+                        <option value="Cap. QOBM">Cap. QOBM</option>
+                        <option value="1º Ten. QOBM">1º Ten. QOBM</option>
+                        <option value="2º Ten. QOBM">2º Ten. QOBM</option>
+                        <option value="Asp. Oficial">Asp. Oficial</option>
+                        <option value="Sub. Ten. QPBM">Sub. Ten. QPBM</option>
+                        <option value="1º Sgt. QPBM">1º Sgt. QPBM</option>
+                        <option value="2º Sgt. QPBM">2º Sgt. QPBM</option>
+                        <option value="3º Sgt. QPBM">3º Sgt. QPBM</option>
+                        <option value="Cb. QPBM">Cb. QPBM</option>
+                        <option value="Sd. QPBM">Sd. QPBM</option>
+                    </select>
+                </div>
+                <div class="form-group" style="grid-column: 2 / 5;">
                     <label for="nome_completo">Nome Completo:</label>
                     <input type="text" id="nome_completo" name="nome_completo" placeholder="Nome completo do piloto" required>
                 </div>
-                <div class="form-group">
+            </div>
+            <div class="form-grid">
+                 <div class="form-group">
                     <label for="rg">RG:</label>
                     <input type="text" id="rg" name="rg" placeholder="Ex: X.XXX.XXX-X" required>
                 </div>
@@ -141,6 +165,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </form>
     </div>
 </div>
+
+<style>
+    /* Novo estilo para o grid de nome */
+    .form-grid-piloto {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 20px;
+        align-items: flex-end;
+    }
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

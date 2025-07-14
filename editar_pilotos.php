@@ -29,6 +29,7 @@ if ($result_unidades) {
 $piloto_id = isset($_GET['id']) ? intval($_GET['id']) : (isset($_POST['piloto_id']) ? intval($_POST['piloto_id']) : null);
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
+    $posto_graduacao = htmlspecialchars($_POST['posto_graduacao']);
     $nome_completo = htmlspecialchars($_POST['nome_completo']);
     $rg = htmlspecialchars($_POST['rg']);
     $cpf = htmlspecialchars($_POST['cpf']);
@@ -42,8 +43,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
     $info_adicionais_piloto = htmlspecialchars($_POST['info_adicionais']);
     $tipo_usuario = htmlspecialchars($_POST['tipo_usuario']);
 
-    $stmt = $conn->prepare("UPDATE pilotos SET nome_completo=?, rg=?, cpf=?, email=?, telefone=?, crbm_piloto=?, obm_piloto=?, cadastro_sarpas=?, cparp=?, status_piloto=?, info_adicionais=?, tipo_usuario=? WHERE id = ?");
-    $stmt->bind_param("ssssssssssssi", $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $tipo_usuario, $piloto_id);
+    $stmt = $conn->prepare("UPDATE pilotos SET posto_graduacao=?, nome_completo=?, rg=?, cpf=?, email=?, telefone=?, crbm_piloto=?, obm_piloto=?, cadastro_sarpas=?, cparp=?, status_piloto=?, info_adicionais=?, tipo_usuario=? WHERE id = ?");
+    $stmt->bind_param("sssssssssssssi", $posto_graduacao, $nome_completo, $rg, $cpf, $email, $telefone, $crbm_piloto, $obm_piloto, $cadastro_sarpas, $cparp, $status_piloto, $info_adicionais_piloto, $tipo_usuario, $piloto_id);
 
     if ($stmt->execute()) {
         $mensagem_status = "<div class='success-message-box'>Piloto atualizado com sucesso! Redirecionando...</div>";
@@ -54,7 +55,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && $piloto_id) {
 }
 
 if ($piloto_id) {
-    $stmt_load = $conn->prepare("SELECT id, nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, tipo_usuario FROM pilotos WHERE id = ?");
+    // Atualiza a consulta para buscar o novo campo
+    $stmt_load = $conn->prepare("SELECT id, posto_graduacao, nome_completo, rg, cpf, email, telefone, crbm_piloto, obm_piloto, cadastro_sarpas, cparp, status_piloto, info_adicionais, tipo_usuario FROM pilotos WHERE id = ?");
     $stmt_load->bind_param("i", $piloto_id);
     $stmt_load->execute();
     $result = $stmt_load->get_result();
@@ -80,11 +82,32 @@ if ($piloto_id) {
     <div class="form-container">
         <form id="editPilotoForm" action="editar_pilotos.php?id=<?php echo htmlspecialchars($piloto_id); ?>" method="POST">
             <input type="hidden" name="piloto_id" value="<?php echo htmlspecialchars($piloto_data['id']); ?>">
-            <div class="form-grid">
-                <div class="form-group">
+            <div class="form-grid-piloto">
+                <div class="form-group" style="grid-column: 1 / 2;">
+                    <label for="posto_graduacao">Posto/Graduação:</label>
+                    <select id="posto_graduacao" name="posto_graduacao" required>
+                        <option value="">Selecione...</option>
+                        <option value="Cel. QOBM" <?php if($piloto_data['posto_graduacao'] == 'Cel. QOBM') echo 'selected'; ?>>Cel. QOBM</option>
+                        <option value="Ten. Cel. QOBM" <?php if($piloto_data['posto_graduacao'] == 'Ten. Cel. QOBM') echo 'selected'; ?>>Ten. Cel. QOBM</option>
+                        <option value="Maj. QOBM" <?php if($piloto_data['posto_graduacao'] == 'Maj. QOBM') echo 'selected'; ?>>Maj. QOBM</option>
+                        <option value="Cap. QOBM" <?php if($piloto_data['posto_graduacao'] == 'Cap. QOBM') echo 'selected'; ?>>Cap. QOBM</option>
+                        <option value="1º Ten. QOBM" <?php if($piloto_data['posto_graduacao'] == '1º Ten. QOBM') echo 'selected'; ?>>1º Ten. QOBM</option>
+                        <option value="2º Ten. QOBM" <?php if($piloto_data['posto_graduacao'] == '2º Ten. QOBM') echo 'selected'; ?>>2º Ten. QOBM</option>
+                        <option value="Asp. Oficial" <?php if($piloto_data['posto_graduacao'] == 'Asp. Oficial') echo 'selected'; ?>>Asp. Oficial</option>
+                        <option value="Sub. Ten. QPBM" <?php if($piloto_data['posto_graduacao'] == 'Sub. Ten. QPBM') echo 'selected'; ?>>Sub. Ten. QPBM</option>
+                        <option value="1º Sgt. QPBM" <?php if($piloto_data['posto_graduacao'] == '1º Sgt. QPBM') echo 'selected'; ?>>1º Sgt. QPBM</option>
+                        <option value="2º Sgt. QPBM" <?php if($piloto_data['posto_graduacao'] == '2º Sgt. QPBM') echo 'selected'; ?>>2º Sgt. QPBM</option>
+                        <option value="3º Sgt. QPBM" <?php if($piloto_data['posto_graduacao'] == '3º Sgt. QPBM') echo 'selected'; ?>>3º Sgt. QPBM</option>
+                        <option value="Cb. QPBM" <?php if($piloto_data['posto_graduacao'] == 'Cb. QPBM') echo 'selected'; ?>>Cb. QPBM</option>
+                        <option value="Sd. QPBM" <?php if($piloto_data['posto_graduacao'] == 'Sd. QPBM') echo 'selected'; ?>>Sd. QPBM</option>
+                    </select>
+                </div>
+                <div class="form-group" style="grid-column: 2 / 5;">
                     <label for="nome_completo">Nome Completo:</label>
                     <input type="text" id="nome_completo" name="nome_completo" value="<?php echo htmlspecialchars($piloto_data['nome_completo']); ?>" required>
                 </div>
+            </div>
+            <div class="form-grid">
                 <div class="form-group">
                     <label for="rg">RG:</label>
                     <input type="text" id="rg" name="rg" value="<?php echo htmlspecialchars($piloto_data['rg']); ?>" required>
@@ -155,6 +178,16 @@ if ($piloto_id) {
         <p style="text-align: center; color: #dc3545;">Não foi possível carregar os dados do piloto. <a href="listar_pilotos.php">Volte para a lista</a>.</p>
     <?php endif; ?>
 </div>
+
+<style>
+    .form-grid-piloto {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 20px;
+        align-items: flex-end;
+    }
+</style>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

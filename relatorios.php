@@ -38,7 +38,7 @@ function formatarDistancia($metros) {
     if ($metros < 1000) {
         return round($metros) . ' m';
     } else {
-        return round($metros / 1000, 2) . ' km';
+        return number_format($metros / 1000, 2, ',', '.') . ' km';
     }
 }
 ?>
