@@ -95,9 +95,10 @@ elseif ($isPiloto) {
 
 // ### LÓGICA PARA AS ÚLTIMAS MISSÕES ###
 $ultimas_missoes = [];
+// CORREÇÃO APLICADA AQUI: m.data_ocorrencia foi trocado para m.data
 $sql_ultimas_missoes = "
     SELECT 
-        m.id, m.data_ocorrencia, m.total_tempo_voo,
+        m.id, m.data, m.total_tempo_voo,
         a.prefixo AS aeronave_prefixo,
         GROUP_CONCAT(CONCAT(p.posto_graduacao, ' ', p.nome_completo) 
             ORDER BY
@@ -114,7 +115,7 @@ $sql_ultimas_missoes = "
     LEFT JOIN missoes_pilotos mp ON m.id = mp.missao_id
     LEFT JOIN pilotos p ON mp.piloto_id = p.id
     GROUP BY m.id
-    ORDER BY m.data_ocorrencia DESC, m.id DESC
+    ORDER BY m.data DESC, m.id DESC
     LIMIT 5
 ";
 $result_ultimas_missoes = $conn->query($sql_ultimas_missoes);
@@ -240,7 +241,7 @@ function formatarTempoVoo($segundos) {
                             <tr>
                                 <td style="text-align: center;"><?php echo htmlspecialchars($missao['aeronave_prefixo']); ?></td>
                                 <td style="text-align: center;"><?php echo $missao['pilotos_nomes'] ?? 'N/A'; ?></td>
-                                <td style="text-align: center;"><?php echo date("d/m/Y", strtotime($missao['data_ocorrencia'])); ?></td>
+                                <td style="text-align: center;"><?php echo date("d/m/Y", strtotime($missao['data'])); ?></td>
                                 <td style="text-align: center;"><?php echo formatarTempoVoo($missao['total_tempo_voo']); ?></td>
                                 <td style="text-align: center;"><span class="status-ativo">Concluída</span></td>
                             </tr>

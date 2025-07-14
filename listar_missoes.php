@@ -18,7 +18,8 @@ if ($isAdmin && isset($_GET['delete_id'])) {
         $stmt_get_data->close();
 
         if ($missao_data) {
-            $stmt_get_files = $conn->prepare("SELECT file_path FROM missoes_gpx_files WHERE missao_id = ?");
+            $gpx_files_ids = [];
+            $stmt_get_files = $conn->prepare("SELECT id, file_path FROM missoes_gpx_files WHERE missao_id = ?");
             $stmt_get_files->bind_param("i", $missao_id_para_excluir);
             $stmt_get_files->execute();
             $result_files = $stmt_get_files->get_result();
@@ -26,24 +27,39 @@ if ($isAdmin && isset($_GET['delete_id'])) {
                 if (file_exists($file['file_path'])) {
                     unlink($file['file_path']);
                 }
+                $gpx_files_ids[] = $file['id'];
             }
             $stmt_get_files->close();
+
+            if (!empty($gpx_files_ids)) {
+                $ids_placeholder = implode(',', array_fill(0, count($gpx_files_ids), '?'));
+                $stmt_delete_coords = $conn->prepare("DELETE FROM missao_coordenadas WHERE gpx_file_id IN ($ids_placeholder)");
+                $types = str_repeat('i', count($gpx_files_ids));
+                $stmt_delete_coords->bind_param($types, ...$gpx_files_ids);
+                $stmt_delete_coords->execute();
+                $stmt_delete_coords->close();
+            }
+
+            $stmt_delete_gpx = $conn->prepare("DELETE FROM missoes_gpx_files WHERE missao_id = ?");
+            $stmt_delete_gpx->bind_param("i", $missao_id_para_excluir);
+            $stmt_delete_gpx->execute();
+            $stmt_delete_gpx->close();
 
             $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
             $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
             $stmt_delete_pilots->execute();
             $stmt_delete_pilots->close();
 
-            $stmt_delete_mission = $conn->prepare("DELETE FROM missoes WHERE id = ?");
-            $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
-            $stmt_delete_mission->execute();
-            $stmt_delete_mission->close();
-            
             $stmt_update_logbook = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = distancia_total_acumulada - ?, tempo_voo_total_acumulado = tempo_voo_total_acumulado - ? WHERE aeronave_id = ?");
             $stmt_update_logbook->bind_param("ddi", $missao_data['total_distancia_percorrida'], $missao_data['total_tempo_voo'], $missao_data['aeronave_id']);
             $stmt_update_logbook->execute();
             $stmt_update_logbook->close();
 
+            $stmt_delete_mission = $conn->prepare("DELETE FROM missoes WHERE id = ?");
+            $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
+            $stmt_delete_mission->execute();
+            $stmt_delete_mission->close();
+            
             $conn->commit();
             $mensagem_status = "<div class='success-message-box'>Missão #" . $missao_id_para_excluir . " e todos os seus dados foram excluídos com sucesso.</div>";
         } else {
@@ -55,30 +71,20 @@ if ($isAdmin && isset($_GET['delete_id'])) {
     }
 }
 
-
-// --- LÓGICA PARA BUSCAR AS MISSÕES COM ORDENAÇÃO DE PILOTOS POR GRADUAÇÃO ---
+// --- LÓGICA PARA BUSCAR AS MISSÕES COM ORDENAÇÃO DE PILOTOS CORRIGIDA ---
 $missoes = [];
 $sql_missoes = "
     SELECT 
-        m.id, m.data_ocorrencia, m.tipo_ocorrencia, m.rgo_ocorrencia, m.total_tempo_voo,
+        m.id, m.data, m.descricao_operacao, m.rgo_ocorrencia, m.total_tempo_voo,
         a.prefixo AS aeronave_prefixo,
-        GROUP_CONCAT(CONCAT(p.posto_graduacao, ' ', p.nome_completo) 
+        GROUP_CONCAT(DISTINCT CONCAT(p.posto_graduacao, ' ', p.nome_completo) 
             ORDER BY
                 CASE p.posto_graduacao
-                    WHEN 'Cel. QOBM' THEN 1
-                    WHEN 'Ten. Cel. QOBM' THEN 2
-                    WHEN 'Maj. QOBM' THEN 3
-                    WHEN 'Cap. QOBM' THEN 4
-                    WHEN '1º Ten. QOBM' THEN 5
-                    WHEN '2º Ten. QOBM' THEN 6
-                    WHEN 'Asp. Oficial' THEN 7
-                    WHEN 'Sub. Ten. QPBM' THEN 8
-                    WHEN '1º Sgt. QPBM' THEN 9
-                    WHEN '2º Sgt. QPBM' THEN 10
-                    WHEN '3º Sgt. QPBM' THEN 11
-                    WHEN 'Cb. QPBM' THEN 12
-                    WHEN 'Sd. QPBM' THEN 13
-                    ELSE 14
+                    WHEN 'Cel. QOBM' THEN 1 WHEN 'Ten. Cel. QOBM' THEN 2 WHEN 'Maj. QOBM' THEN 3
+                    WHEN 'Cap. QOBM' THEN 4 WHEN '1º Ten. QOBM' THEN 5 WHEN '2º Ten. QOBM' THEN 6
+                    WHEN 'Asp. Oficial' THEN 7 WHEN 'Sub. Ten. QPBM' THEN 8 WHEN '1º Sgt. QPBM' THEN 9
+                    WHEN '2º Sgt. QPBM' THEN 10 WHEN '3º Sgt. QPBM' THEN 11 WHEN 'Cb. QPBM' THEN 12
+                    WHEN 'Sd. QPBM' THEN 13 ELSE 14
                 END
             SEPARATOR '<br>') AS pilotos_nomes
     FROM missoes m
@@ -86,7 +92,7 @@ $sql_missoes = "
     LEFT JOIN missoes_pilotos mp ON m.id = mp.missao_id
     LEFT JOIN pilotos p ON mp.piloto_id = p.id
     GROUP BY m.id
-    ORDER BY m.data_ocorrencia DESC, m.id DESC
+    ORDER BY m.data DESC, m.id DESC
 ";
 $result_missoes = $conn->query($sql_missoes);
 if ($result_missoes) {
@@ -109,22 +115,10 @@ function formatarTempoVoo($segundos) {
 <style>
 /* Adiciona uma dica visual para rolagem em telas pequenas */
 @media (max-width: 768px) {
-    .table-container::after {
-        content: '◄ Arraste para ver mais ►';
-        display: block;
-        text-align: center;
-        font-size: 0.8em;
-        color: #999;
-        margin-top: 10px;
-    }
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
+    .table-container::after { content: '◄ Arraste para ver mais ►'; display: block; text-align: center; font-size: 0.8em; color: #999; margin-top: 10px; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 15px; }
 }
 </style>
-
 <div class="main-content">
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
         <h1>Logbook de Missões</h1>
@@ -142,7 +136,7 @@ function formatarTempoVoo($segundos) {
                     <th>Data</th>
                     <th>Aeronave</th>
                     <th>Piloto(s)</th>
-                    <th>Ocorrência</th>
+                    <th>Operação</th>
                     <th>Tempo de Voo</th>
                     <th>Ações</th>
                 </tr>
@@ -151,12 +145,12 @@ function formatarTempoVoo($segundos) {
                 <?php if (!empty($missoes)): ?>
                     <?php foreach ($missoes as $missao): ?>
                         <tr>
-                            <td style="text-align: center;"><?php echo date("d/m/Y", strtotime($missao['data_ocorrencia'])); ?></td>
+                            <td style="text-align: center;"><?php echo date("d/m/Y", strtotime($missao['data'])); ?></td>
                             <td style="text-align: center;"><?php echo htmlspecialchars($missao['aeronave_prefixo']); ?></td>
                             <td style="text-align: center;"><?php echo $missao['pilotos_nomes'] ?? 'Nenhum piloto associado'; ?></td>
                             <td style="text-align: center;">
                                 <strong><?php echo htmlspecialchars($missao['rgo_ocorrencia'] ?? 'MISSÃO SEM RGO'); ?></strong><br>
-                                <small><?php echo htmlspecialchars($missao['tipo_ocorrencia']); ?></small>
+                                <small><?php echo htmlspecialchars($missao['descricao_operacao']); ?></small>
                             </td>
                             <td style="text-align: center;"><?php echo formatarTempoVoo($missao['total_tempo_voo']); ?></td>
                             <td class="action-buttons">
@@ -176,7 +170,6 @@ function formatarTempoVoo($segundos) {
         </table>
     </div>
 </div>
-
 <?php
 require_once 'includes/footer.php';
 ?>

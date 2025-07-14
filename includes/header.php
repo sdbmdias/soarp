@@ -178,8 +178,7 @@ if ($isAdmin) {
                     <li><a href="cadastro_controles.php">Cadastro de Controles</a></li>
                     <li><a href="cadastro_modelos.php">Cadastro de Modelos</a></li>
                     <li><a href="cadastro_crbm_obm.php">Cadastro de CRBM/OBM</a></li>
-                    <li><a href="cadastro_tipos_ocorrencia.php">Cadastro de Ocorrências</a></li>
-                    <li><a href="gerenciar_documentos.php">Gerenciar Documentos</a></li>
+                    <li><a href="cadastro_operacoes.php">Cadastro de Operações</a></li> <li><a href="gerenciar_documentos.php">Gerenciar Documentos</a></li>
                     <li><a href="alertas.php" class="<?php if ($existem_alertas) echo 'menu-alert'; ?>">Alertas</a></li>
                 </ul>
             </li>

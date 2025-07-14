@@ -18,6 +18,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         if ($stmt->execute()) {
             $mensagem_status = "<div class='success-message-box'>RELPREV enviado com sucesso. Agradecemos sua contribuição para a segurança operacional.</div>";
+            // Adiciona o script de redirecionamento após a mensagem de sucesso
+            echo "<script>setTimeout(function() { window.location.href = 'dashboard.php'; }, 2000);</script>";
         } else {
             $mensagem_status = "<div class='error-message-box'>Erro ao enviar o registro: " . htmlspecialchars($stmt->error) . "</div>";
         }

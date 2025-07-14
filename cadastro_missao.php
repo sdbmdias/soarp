@@ -4,11 +4,10 @@ require_once 'gpx_parser.php';
 
 $mensagem_status = "";
 
-// 1. Busca aeronaves e tipos de ocorrência
+// --- Lógica de busca de dados para os selects ---
 $aeronaves_disponiveis = [];
-$tipos_ocorrencia = [];
+$tipos_operacao = [];
 
-// Filtra aeronaves por CRBM se o usuário for piloto
 if ($isPiloto) {
     $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
     $stmt_crbm->bind_param("i", $_SESSION['user_id']);
@@ -22,27 +21,20 @@ if ($isPiloto) {
     $stmt_aeronaves->bind_param("s", $crbm_do_piloto);
     $stmt_aeronaves->execute();
     $result_aeronaves = $stmt_aeronaves->get_result();
-} else { // Admin vê todas
+} else {
     $sql_aeronaves = "SELECT id, prefixo, modelo, crbm FROM aeronaves WHERE status = 'ativo' ORDER BY prefixo ASC";
     $result_aeronaves = $conn->query($sql_aeronaves);
 }
-
 if ($result_aeronaves) {
-    while($row = $result_aeronaves->fetch_assoc()) {
-        $aeronaves_disponiveis[] = $row;
-    }
+    while($row = $result_aeronaves->fetch_assoc()) { $aeronaves_disponiveis[] = $row; }
 }
 
-// Busca os tipos de ocorrência cadastrados
-$result_ocorrencias = $conn->query("SELECT id, nome FROM tipos_ocorrencia ORDER BY nome ASC");
-if($result_ocorrencias) {
-    while($row = $result_ocorrencias->fetch_assoc()) {
-        $tipos_ocorrencia[] = $row;
-    }
+$result_operacoes = $conn->query("SELECT id, nome FROM tipos_operacao ORDER BY nome ASC");
+if($result_operacoes) {
+    while($row = $result_operacoes->fetch_assoc()) { $tipos_operacao[] = $row; }
 }
 
-
-// LÓGICA DE SUBMISSÃO DO FORMULÁRIO
+// --- Lógica de submissão do formulário ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     if (isset($_FILES['gpx_files']) && count(array_filter($_FILES['gpx_files']['name'])) > 0 && isset($_POST['pilotos']) && !empty($_POST['pilotos'])) {
@@ -61,13 +53,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 throw new Exception("Não foi possível processar os ficheiros GPX.");
             }
             
+            // Coleta dos dados do formulário
             $aeronave_id = intval($_POST['aeronave_id']);
             $pilotos_selecionados = array_unique(array_filter($_POST['pilotos']));
-            $data_ocorrencia = htmlspecialchars($_POST['data_ocorrencia']);
-            $tipo_ocorrencia = htmlspecialchars($_POST['tipo_ocorrencia']);
+            $data = htmlspecialchars($_POST['data']);
+            $descricao_operacao = htmlspecialchars($_POST['descricao_operacao']);
             $protocolo_sarpas = htmlspecialchars($_POST['protocolo_sarpas']);
             $rgo_ocorrencia = htmlspecialchars($_POST['rgo_ocorrencia']);
             $dados_vitima = htmlspecialchars($_POST['dados_vitima']);
+            $link_fotos_videos = htmlspecialchars($_POST['link_fotos_videos']);
+            $descricao_ocorrido = htmlspecialchars($_POST['descricao_ocorrido']);
+            $contato_ats = htmlspecialchars($_POST['contato_ats']);
+            $contato_ats_outro = ($contato_ats == 'Outro') ? htmlspecialchars($_POST['contato_ats_outro']) : NULL;
+            $forma_acionamento = htmlspecialchars($_POST['forma_acionamento']);
+            $forma_acionamento_outro = ($forma_acionamento == 'Outro') ? htmlspecialchars($_POST['forma_acionamento_outro']) : NULL;
 
             $altitude_maxima = $logData['altitude_maxima'];
             $total_distancia_percorrida = $logData['total_distancia_percorrida'];
@@ -75,12 +74,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $data_primeira_decolagem = $logData['data_primeira_decolagem'];
             $data_ultimo_pouso = $logData['data_ultimo_pouso'];
 
-            $stmt_missao = $conn->prepare("INSERT INTO missoes (aeronave_id, data_ocorrencia, tipo_ocorrencia, protocolo_sarpas, rgo_ocorrencia, dados_vitima, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt_missao->bind_param("isssssdidss", $aeronave_id, $data_ocorrencia, $tipo_ocorrencia, $protocolo_sarpas, $rgo_ocorrencia, $dados_vitima, $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso);
+            $stmt_missao = $conn->prepare(
+                "INSERT INTO missoes (aeronave_id, data, descricao_operacao, protocolo_sarpas, rgo_ocorrencia, dados_vitima, link_fotos_videos, descricao_ocorrido, contato_ats, contato_ats_outro, forma_acionamento, forma_acionamento_outro, altitude_maxima, total_distancia_percorrida, total_tempo_voo, data_primeira_decolagem, data_ultimo_pouso) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            $stmt_missao->bind_param("isssssssssssddiss", 
+                $aeronave_id, $data, $descricao_operacao, $protocolo_sarpas, $rgo_ocorrencia, $dados_vitima, $link_fotos_videos, $descricao_ocorrido, $contato_ats, $contato_ats_outro, $forma_acionamento, $forma_acionamento_outro,
+                $altitude_maxima, $total_distancia_percorrida, $total_tempo_voo, $data_primeira_decolagem, $data_ultimo_pouso
+            );
+            
             $stmt_missao->execute();
             $missao_id = $conn->insert_id;
+            if ($missao_id == 0) {
+                throw new Exception("Falha ao criar a missão principal. Erro: " . $conn->error);
+            }
             $stmt_missao->close();
 
+            // Salvar pilotos
             $stmt_pilotos_assoc = $conn->prepare("INSERT INTO missoes_pilotos (missao_id, piloto_id) VALUES (?, ?)");
             foreach ($pilotos_selecionados as $piloto_id) {
                 $pid = intval($piloto_id);
@@ -89,6 +99,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             $stmt_pilotos_assoc->close();
             
+            // Salvar logs GPX e coordenadas
             $stmt_gpx = $conn->prepare("INSERT INTO missoes_gpx_files (missao_id, file_name, file_path, tempo_voo, distancia_percorrida, altura_maxima, data_decolagem, data_pouso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt_coords = $conn->prepare("INSERT INTO missao_coordenadas (gpx_file_id, latitude, longitude, altitude, timestamp_ponto) VALUES (?, ?, ?, ?, ?)");
 
@@ -108,6 +119,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $stmt_gpx->bind_param("issiddss", $missao_id, $name, $file_path_db, $tempo_voo_individual, $distancia_individual, $altura_maxima_individual, $decolagem_str, $pouso_str);
                     $stmt_gpx->execute();
                     $gpx_file_id = $conn->insert_id;
+                    if ($gpx_file_id == 0) {
+                        throw new Exception("Falha ao criar o registo do ficheiro GPX.");
+                    }
 
                     foreach ($file_log_data['trackPoints'] as $point) {
                         $lat = $point['lat'];
@@ -123,6 +137,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_gpx->close();
             $stmt_coords->close();
             
+            // Atualizar logbook da aeronave
             $stmt_logbook = $conn->prepare("INSERT INTO aeronaves_logbook (aeronave_id, distancia_total_acumulada, tempo_voo_total_acumulado) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE distancia_total_acumulada = distancia_total_acumulada + VALUES(distancia_total_acumulada), tempo_voo_total_acumulado = tempo_voo_total_acumulado + VALUES(tempo_voo_total_acumulado)");
             $stmt_logbook->bind_param("idi", $aeronave_id, $total_distancia_percorrida, $total_tempo_voo);
             $stmt_logbook->execute();
@@ -148,9 +163,73 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php echo $mensagem_status; ?>
     <div class="form-container">
         <form id="missaoForm" action="cadastro_missao.php" method="POST" enctype="multipart/form-data">
+            
             <fieldset>
-                <legend>1. Detalhes da Missão</legend>
+                <legend>1. Dados da Operação</legend>
                 <div class="form-grid">
+                    <div class="form-group">
+                        <label for="data">Data:</label>
+                        <input type="date" id="data" name="data" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="descricao_operacao">Descrição da Operação:</label>
+                        <select id="descricao_operacao" name="descricao_operacao" required>
+                            <option value="">Selecione o Tipo</option>
+                            <?php foreach($tipos_operacao as $tipo): ?>
+                                <option value="<?php echo htmlspecialchars($tipo['nome']); ?>"><?php echo htmlspecialchars($tipo['nome']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="forma_acionamento">Forma de Acionamento:</label>
+                        <select id="forma_acionamento" name="forma_acionamento" required onchange="toggleOtherInput(this, 'outro_acionamento_wrapper')">
+                            <option value="">Selecione...</option>
+                            <option value="Oficial de dia">Oficial de dia</option>
+                            <option value="COBOM">COBOM</option>
+                            <option value="Chefe de Socorro">Chefe de Socorro</option>
+                            <option value="Camara Técnica RPAS">Câmara Técnica RPAS</option>
+                            <option value="Comandante da BBM/CRBM">Comandante da BBM/CRBM</option>
+                            <option value="BOA/BPMOA/GOA">BOA/BPMOA/GOA</option>
+                            <option value="SOARP">SOARP</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div id="outro_acionamento_wrapper" class="form-group" style="display: none;">
+                        <label for="forma_acionamento_outro">Descreva qual:</label>
+                        <input type="text" id="forma_acionamento_outro" name="forma_acionamento_outro">
+                    </div>
+                    <div class="form-group">
+                        <label for="rgo_ocorrencia">Nº do RGO:</label>
+                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" placeholder="Ex: 123456/2025" required>
+                    </div>
+                     <div class="form-group">
+                        <label for="protocolo_sarpas">Protocolo SARPAS:</label>
+                        <input type="text" id="protocolo_sarpas" name="protocolo_sarpas" placeholder="Ex: AS202407-1234" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contato_ats">Contato com o Orgão ATS:</label>
+                         <select id="contato_ats" name="contato_ats" required onchange="toggleOtherInput(this, 'outro_ats_wrapper')">
+                            <option value="Não se Aplica">Não se Aplica</option>
+                            <option value="Telefonia">Telefonia</option>
+                            <option value="WhatsApp">WhatsApp</option>
+                            <option value="Rádio">Rádio</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div id="outro_ats_wrapper" class="form-group" style="display: none;">
+                        <label for="contato_ats_outro">Descreva qual:</label>
+                        <input type="text" id="contato_ats_outro" name="contato_ats_outro">
+                    </div>
+                </div>
+                 <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="descricao_ocorrido">Descreva o Ocorrido:</label>
+                    <textarea id="descricao_ocorrido" name="descricao_ocorrido" rows="4" placeholder="Relato sucinto dos fatos e ações." required></textarea>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>2. Equipamentos e Pessoal</legend>
+                 <div class="form-grid">
                     <div class="form-group">
                         <label for="aeronave_id">Aeronave (HAWK):</label>
                         <select id="aeronave_id" name="aeronave_id" required>
@@ -170,27 +249,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <button type="button" id="add-pilot-btn" class="button-secondary" style="margin-top: 10px; display: none;">Adicionar outro Piloto</button>
                     </div>
                 </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>3. Dados Complementares</legend>
                 <div class="form-grid">
-                    <div class="form-group">
-                        <label for="data_ocorrencia">Data da Ocorrência:</label>
-                        <input type="date" id="data_ocorrencia" name="data_ocorrencia" value="<?php echo date('Y-m-d'); ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="tipo_ocorrencia">Tipo da Ocorrência:</label>
-                        <select id="tipo_ocorrencia" name="tipo_ocorrencia" required>
-                            <option value="">Selecione o Tipo</option>
-                            <?php foreach($tipos_ocorrencia as $tipo): ?>
-                                <option value="<?php echo htmlspecialchars($tipo['nome']); ?>"><?php echo htmlspecialchars($tipo['nome']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="protocolo_sarpas">Protocolo SARPAS:</label>
-                        <input type="text" id="protocolo_sarpas" name="protocolo_sarpas" placeholder="Ex: AS202407-1234" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="rgo_ocorrencia">Nº do RGO:</label>
-                        <input type="text" id="rgo_ocorrencia" name="rgo_ocorrencia" placeholder="Ex: 123456/2025" required>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="link_fotos_videos">Link do Upload das Fotos/Vídeos:</label>
+                        <input type="url" id="link_fotos_videos" name="link_fotos_videos" placeholder="https://exemplo.com/fotos_da_missao">
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label for="dados_vitima">Dados da Vítima (Opcional):</label>
@@ -198,9 +264,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                 </div>
             </fieldset>
-
+            
             <fieldset>
-                <legend>2. Ficheiros de Log de Voo (GPX)</legend>
+                <legend>4. Ficheiros de Log de Voo (GPX)</legend>
                 <div class="form-group">
                     <label for="gpx_files">Selecione os ficheiros GPX da missão:</label>
                     <input type="file" id="gpx_files" name="gpx_files[]" accept=".gpx" multiple required>
@@ -217,6 +283,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </div>
 
 <script>
+function toggleOtherInput(selectElement, wrapperId) {
+    const wrapper = document.getElementById(wrapperId);
+    const otherInput = wrapper.querySelector('input');
+    if (selectElement.value === 'Outro') {
+        wrapper.style.display = 'block';
+        otherInput.required = true;
+    } else {
+        wrapper.style.display = 'none';
+        otherInput.required = false;
+        otherInput.value = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const aeronaveSelect = document.getElementById('aeronave_id');
     const pilotsContainer = document.getElementById('pilots-container');
@@ -227,30 +306,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedOption = this.options[this.selectedIndex];
         const crbm = selectedOption.getAttribute('data-crbm');
         
-        // Limpa a seleção de pilotos e esconde o botão
         pilotsContainer.innerHTML = '<small>Carregando pilotos...</small>';
         addPilotBtn.style.display = 'none';
 
         if (crbm) {
             fetch(`get_pilotos.php?crbm=${crbm}`)
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Erro na rede ou no servidor.');
-                    }
+                    if (!response.ok) { throw new Error('Erro na rede ou no servidor.'); }
                     return response.json();
                 })
                 .then(data => {
                     pilotList = data;
-                    pilotsContainer.innerHTML = ''; // Limpa a mensagem de "carregando"
+                    pilotsContainer.innerHTML = '';
                     if (pilotList.length > 0) {
-                        addPilotSelect(); // Adiciona o primeiro select
-                        addPilotBtn.style.display = 'inline-block'; // Mostra o botão
+                        addPilotSelect();
+                        addPilotBtn.style.display = 'inline-block';
                     } else {
                         pilotsContainer.innerHTML = '<small>Nenhum piloto ativo encontrado para este CRBM.</small>';
                     }
                 })
                 .catch(error => {
-                    pilotsContainer.innerHTML = `<small style="color: red;">Erro ao carregar pilotos: ${error.message}</small>`;
+                    pilotsContainer.innerHTML = `<small style="color: red;">${error.message}</small>`;
                 });
         } else {
             pilotsContainer.innerHTML = '<small>Selecione uma aeronave para carregar a lista de pilotos.</small>';
@@ -275,7 +351,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         selectWrapper.appendChild(newSelect);
 
-        // Adicionar botão de remover, exceto para o primeiro select
         if (pilotsContainer.children.length > 0) {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
@@ -298,7 +373,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     addPilotBtn.addEventListener('click', addPilotSelect);
 
-    // Validação para não permitir submeter pilotos duplicados
     const form = document.getElementById('missaoForm');
     form.addEventListener('submit', function(e) {
         const selectedPilots = Array.from(document.querySelectorAll('select[name="pilotos[]"]')).map(s => s.value);
@@ -310,7 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Exibe os nomes dos arquivos selecionados
     const gpxInput = document.getElementById('gpx_files');
     const fileListDiv = document.getElementById('file-list');
     gpxInput.addEventListener('change', function() {
