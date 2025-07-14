@@ -126,10 +126,10 @@ foreach ($todos_documentos as $doc) {
                 <label for="q" style="font-size: 1.1em;">Buscar Documentos:</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="text" id="q" name="q" placeholder="Digite o nome do documento..." value="<?php echo htmlspecialchars($search_term); ?>" style="flex-grow: 1;">
-                    <button type="submit" class="form-actions button" style="padding: 10px 20px; font-size: 16px; background-color: #007bff; display: inline-flex; align-items: center; gap: 8px;">
+                    <button type="submit" class="action-btn" style="background-color: #007bff; border: none; cursor: pointer;">
                         <i class="fas fa-search"></i><span>Buscar</span>
                     </button>
-                    <a href="gerenciar_documentos.php" class="form-actions button" style="text-decoration:none; padding: 10px 20px; font-size: 16px; background-color: #6c757d;">
+                    <a href="gerenciar_documentos.php" class="action-btn" style="background-color: #6c757d;">
                         Limpar
                     </a>
                 </div>
@@ -154,8 +154,8 @@ foreach ($todos_documentos as $doc) {
                         <tr>
                             <td><?php echo htmlspecialchars($doc['nome_exibicao']); ?></td>
                             <td class="action-buttons">
-                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="edit-btn" download><i class="fas fa-download"></i> Baixar</a>
-                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
+                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="action-btn" style="background-color: #007bff;" download><i class="fas fa-download"></i> Baixar</a>
+                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="action-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -183,8 +183,8 @@ foreach ($todos_documentos as $doc) {
                             <td><?php echo htmlspecialchars($doc['nome_exibicao']); ?></td>
                             <td><?php echo htmlspecialchars(str_replace('||', ', ', $doc['modelos_associados'])); ?></td>
                             <td class="action-buttons">
-                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="edit-btn" download><i class="fas fa-download"></i> Baixar</a>
-                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
+                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="action-btn" style="background-color: #007bff;" download><i class="fas fa-download"></i> Baixar</a>
+                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="action-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -212,8 +212,8 @@ foreach ($todos_documentos as $doc) {
                             <td><?php echo htmlspecialchars($doc['nome_exibicao']); ?></td>
                             <td><?php echo htmlspecialchars($doc['aeronaves_associadas']); ?></td>
                             <td class="action-buttons">
-                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="edit-btn" download><i class="fas fa-download"></i> Baixar</a>
-                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="delete-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
+                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="action-btn" style="background-color: #007bff;" download><i class="fas fa-download"></i> Baixar</a>
+                                <a href="gerenciar_documentos.php?delete_id=<?php echo $doc['id']; ?>" class="action-btn" style="background-color:#dc3545;" onclick="return confirm('ATENÇÃO: Ação irreversível! Deseja excluir permanentemente este documento e todas as suas associações?');"><i class="fas fa-trash-alt"></i> Excluir</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -230,16 +230,39 @@ foreach ($todos_documentos as $doc) {
 .data-table th, .data-table td {
     padding: 12px 15px;
     vertical-align: middle;
-    text-align: center; /* Alinhamento padrão para o centro */
+    text-align: center;
+}
+
+.data-table th:first-child, .data-table td:first-child {
+    text-align: left; /* Mantém a primeira coluna à esquerda */
 }
 
 .data-table th.actions-column,
 .data-table td.action-buttons {
-    width: 220px; /* Largura fixa para consistência */
+    width: 220px;
+}
+
+/* Estilo unificado para botões de ação */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    margin: 2px;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #fff;
+    font-size: .85em;
+    transition: opacity 0.2s;
+    border: none;
+    cursor: pointer;
+}
+.action-btn:hover {
+    opacity: 0.85;
 }
 </style>
 
 <?php
 // INCLUI O RODAPÉ
 require_once 'includes/footer.php';
-?>
+?>  
