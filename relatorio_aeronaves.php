@@ -8,19 +8,41 @@ $where_clauses = [];
 $params = [];
 $types = '';
 
-// Adiciona filtro por CRBM se o parâmetro estiver presente na URL
+// Lógica para buscar o CRBM do piloto logado, se for um piloto (Adicionado)
+$logged_in_pilot_crbm = '';
+if ($isPiloto && isset($_SESSION['user_id'])) {
+    $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
+    if ($stmt_crbm) {
+        $stmt_crbm->bind_param("i", $_SESSION['user_id']);
+        $stmt_crbm->execute();
+        $result_crbm = $stmt_crbm->get_result();
+        if ($result_crbm->num_rows > 0) {
+            $logged_in_pilot_crbm = $result_crbm->fetch_assoc()['crbm_piloto'];
+        }
+        $stmt_crbm->close();
+    } else {
+        error_log("Erro na preparação da consulta de CRBM do piloto para aeronaves: " . $conn->error);
+    }
+}
+
+// Adiciona filtro por CRBM se o parâmetro estiver presente na URL, ou se for piloto logado
 if (isset($_GET['crbm']) && !empty($_GET['crbm'])) {
     $where_clauses[] = "a.crbm = ?";
     $params[] = $_GET['crbm'];
     $types .= 's';
+} elseif ($isPiloto && !empty($logged_in_pilot_crbm)) { // Se for piloto e não houver filtro na URL, filtra pelo CRBM do piloto
+    $where_clauses[] = "a.crbm = ?";
+    $params[] = $logged_in_pilot_crbm;
+    $types .= 's';
 }
+
 
 // SQL para buscar aeronaves e seus dados de logbook
 $sql_aeronaves = "SELECT 
     a.id, a.prefixo, a.fabricante, a.modelo, a.numero_serie, a.cadastro_sisant, a.validade_sisant, 
     a.crbm, a.obm, a.tipo_drone, a.pmd_kg, a.status, a.homologacao_anatel,
     COALESCE(al.distancia_total_acumulada, 0) AS distancia_total_acumulada,
-    COALESCE(al.tempo_voo_total_acumulado, 0) AS tempo_voo_total_acumulada
+    COALESCE(al.tempo_voo_total_acumulado, 0) AS tempo_voo_total_acumulado -- CORRIGIDO: Removido 'A' final do apelido
     FROM aeronaves a
     LEFT JOIN aeronaves_logbook al ON a.id = al.aeronave_id"; // LEFT JOIN para incluir dados de logbook
 
@@ -85,18 +107,23 @@ function formatarDistancia($metros) {
     $title_crbm_suffix = '';
     $current_crbm_filter = '';
 
+    // Prioriza o filtro da URL se existir, senão usa o CRBM do piloto logado
     if (isset($_GET['crbm']) && !empty($_GET['crbm'])) {
         $current_crbm_filter = $_GET['crbm'];
+    } else if ($isPiloto && !empty($logged_in_pilot_crbm)) {
+        $current_crbm_filter = $logged_in_pilot_crbm;
     }
 
     if (!empty($current_crbm_filter)) {
         if ($current_crbm_filter === 'GOST') {
             $title_crbm_suffix = ' - GOST';
         } else {
-            // Aplica a formatação do CRBM para o título
+            // Aplica a formatação do CRBM para o título: ex. "4º CRBM"
             $formatted_crbm_title = preg_replace('/(\d)(CRBM)/', '$1º $2', $current_crbm_filter);
             $title_crbm_suffix = ' - ' . htmlspecialchars($formatted_crbm_title);
         }
+    } else if ($isAdmin) { // Se não houver filtro específico e o usuário for administrador
+        $title_crbm_suffix = ' - De Todas as Aeronaves';
     }
     ?>
     <h1>Logbook por Aeronave<?php echo $title_crbm_suffix; ?></h1>

@@ -193,8 +193,12 @@ function formatarTempoVoo($segundos) {
             if ($current_crbm_filter === 'GOST') {
                 $title_crbm_suffix = ' - GOST';
             } else {
-                $title_crbm_suffix = ' - CRBM ' . htmlspecialchars($current_crbm_filter);
+                // Formatação para "Xº CRBM"
+                $crbm_formatado_titulo = preg_replace('/(\d)(CRBM)/', '$1º $2', $current_crbm_filter);
+                $title_crbm_suffix = ' - ' . htmlspecialchars($crbm_formatado_titulo);
             }
+        } else if ($isAdmin) { // Se não houver filtro específico e o usuário for administrador
+            $title_crbm_suffix = ' - De Todas as Aeronaves';
         }
         ?>
         <h1>Logbook de Missões<?php echo $title_crbm_suffix; ?></h1>
