@@ -30,6 +30,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         if (password_verify($input_password, $piloto['senha'])) {
             if ($piloto['status_piloto'] == 'ativo') {
+                
+                // *** INÍCIO DA NOVA ALTERAÇÃO ***
+                // Atualiza a data e hora do último acesso no banco de dados
+                $update_login_stmt = $conn->prepare("UPDATE pilotos SET ultimo_acesso = NOW() WHERE id = ?");
+                $update_login_stmt->bind_param("i", $piloto['id']);
+                $update_login_stmt->execute();
+                $update_login_stmt->close();
+                // *** FIM DA NOVA ALTERAÇÃO ***
+
                 // Login bem-sucedido, armazena dados na sessão
                 $_SESSION['user_id'] = $piloto['id'];
                 $_SESSION['user_name'] = $piloto['nome_completo'];

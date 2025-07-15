@@ -4,9 +4,26 @@ require_once 'includes/header.php';
 
 // 2. LÓGICA PARA BUSCAR O HISTÓRICO DE MANUTENÇÕES
 $historico_manutencoes = [];
-$manutencoes_por_crbm = []; // Novo array para a visão do admin
+$manutencoes_por_crbm = [];
 
-// A consulta agora busca o CRBM de ambos os tipos de equipamento
+// --- Lógica de Ordenação ---
+$sort_column = isset($_GET['sort']) ? $_GET['sort'] : 'data_manutencao';
+$sort_order = isset($_GET['order']) && strtolower($_GET['order']) == 'asc' ? 'ASC' : 'DESC';
+
+// Validação da coluna de ordenação
+$allowed_columns = ['data_manutencao', 'equipamento', 'tipo_manutencao'];
+if (!in_array($sort_column, $allowed_columns)) {
+    $sort_column = 'data_manutencao';
+}
+
+$order_by_clause = "ORDER BY ";
+if ($sort_column === 'equipamento') {
+    $order_by_clause .= "m.equipamento_tipo $sort_order, aeronave_prefixo $sort_order, controle_sn $sort_order";
+} else {
+    $order_by_clause .= "m.$sort_column $sort_order";
+}
+
+
 $sql_base = "SELECT 
                 m.*, 
                 a.prefixo AS aeronave_prefixo, 
@@ -22,14 +39,13 @@ $sql_base = "SELECT
              LEFT JOIN aeronaves a_vinc ON c.aeronave_id = a_vinc.id";
 
 if ($isAdmin) {
-    // Admin vê tudo, ordenado por CRBM e depois por data
-    $sql_historico = $sql_base . " ORDER BY aeronave_crbm, controle_crbm, m.data_manutencao DESC";
+    // Admin vê tudo, aplicando a ordenação
+    $sql_historico = $sql_base . " " . $order_by_clause;
     $result_historico = $conn->query($sql_historico);
     
     // Organiza os resultados em um array agrupado por CRBM
     if ($result_historico && $result_historico->num_rows > 0) {
         while ($row = $result_historico->fetch_assoc()) {
-            // Determina a qual CRBM o registro pertence
             $crbm_do_registro = $row['aeronave_crbm'] ?? $row['controle_crbm'];
             if (empty($crbm_do_registro)) {
                 $crbm_do_registro = 'Sem Lotação Definida';
@@ -39,7 +55,6 @@ if ($isAdmin) {
     }
 
 } else { // Visão do Piloto
-    // 1. Busca a OBM do piloto logado
     $obm_do_piloto = '';
     $stmt_obm = $conn->prepare("SELECT obm_piloto FROM pilotos WHERE id = ?");
     $stmt_obm->bind_param("i", $_SESSION['user_id']);
@@ -50,10 +65,8 @@ if ($isAdmin) {
     }
     $stmt_obm->close();
 
-    // 2. Busca o histórico de manutenções de equipamentos da OBM do piloto
     if (!empty($obm_do_piloto)) {
-        // A cláusula WHERE agora verifica a OBM em ambas as tabelas de equipamento
-        $sql_historico = $sql_base . " WHERE (a.obm = ? OR c.obm = ?) ORDER BY m.data_manutencao DESC";
+        $sql_historico = $sql_base . " WHERE (a.obm = ? OR c.obm = ?) " . $order_by_clause;
         $stmt_historico = $conn->prepare($sql_historico);
         $stmt_historico->bind_param("ss", $obm_do_piloto, $obm_do_piloto);
         $stmt_historico->execute();
@@ -65,6 +78,12 @@ if ($isAdmin) {
         }
     }
 }
+
+// Helper para links de ordenação
+function get_sort_link_manutencao($column, $current_column, $current_order) {
+    $order = ($column == $current_column && $current_order == 'desc') ? 'asc' : 'desc';
+    return "?sort=$column&order=$order";
+}
 ?>
 
 <style>
@@ -72,6 +91,9 @@ if ($isAdmin) {
     .page-header { flex-direction: column; align-items: flex-start; gap: 15px; }
     .table-container::after { content: '◄ Arraste para ver mais ►'; display: block; text-align: center; font-size: 0.8em; color: #999; margin-top: 10px; }
 }
+.data-table th a { color: inherit; text-decoration: none; display: flex; align-items: center; justify-content: space-between; }
+.data-table th a:hover { color: #0056b3; }
+.data-table th .sort-icon { margin-left: 5px; opacity: 0.6; }
 </style>
 
 <div class="main-content">
@@ -90,11 +112,10 @@ if ($isAdmin) {
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Equipamento</th>
-                                <th>Tipo</th>
-                                <th>Data</th>
+                                <th><a href="<?php echo get_sort_link_manutencao('data_manutencao', $sort_column, strtolower($sort_order)); ?>">Data <i class="fas fa-sort sort-icon"></i></a></th>
+                                <th><a href="<?php echo get_sort_link_manutencao('equipamento', $sort_column, strtolower($sort_order)); ?>">Equipamento <i class="fas fa-sort sort-icon"></i></a></th>
+                                <th><a href="<?php echo get_sort_link_manutencao('tipo_manutencao', $sort_column, strtolower($sort_order)); ?>">Tipo <i class="fas fa-sort sort-icon"></i></a></th>
                                 <th>Responsável</th>
-                                <th>Nota Fiscal / OS</th>
                                 <th>Garantia até</th>
                                 <th>Descrição</th>
                                 <th>Ações</th>
@@ -103,6 +124,7 @@ if ($isAdmin) {
                         <tbody>
                             <?php foreach ($manutencoes as $manutencao): ?>
                                 <tr>
+                                    <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
                                     <td>
                                         <?php 
                                             if ($manutencao['equipamento_tipo'] == 'Aeronave') {
@@ -114,9 +136,7 @@ if ($isAdmin) {
                                         ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
-                                    <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
                                     <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
-                                    <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
                                     <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
                                     <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
                                         <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
@@ -131,21 +151,18 @@ if ($isAdmin) {
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
-            <div class="table-container">
-                <p style="text-align: center;">Nenhum registro de manutenção encontrado.</p>
-            </div>
+            <div class="table-container"><p style="text-align: center;">Nenhum registro de manutenção encontrado.</p></div>
         <?php endif; ?>
 
     <?php else: ?>
         <div class="table-container">
             <table class="data-table">
-                <thead>
+                 <thead>
                     <tr>
-                        <th>Equipamento</th>
-                        <th>Tipo</th>
-                        <th>Data</th>
+                        <th><a href="<?php echo get_sort_link_manutencao('data_manutencao', $sort_column, strtolower($sort_order)); ?>">Data <i class="fas fa-sort sort-icon"></i></a></th>
+                        <th><a href="<?php echo get_sort_link_manutencao('equipamento', $sort_column, strtolower($sort_order)); ?>">Equipamento <i class="fas fa-sort sort-icon"></i></a></th>
+                        <th><a href="<?php echo get_sort_link_manutencao('tipo_manutencao', $sort_column, strtolower($sort_order)); ?>">Tipo <i class="fas fa-sort sort-icon"></i></a></th>
                         <th>Responsável</th>
-                        <th>Nota Fiscal / OS</th>
                         <th>Garantia até</th>
                         <th>Descrição</th>
                         <th>Ações</th>
@@ -155,6 +172,7 @@ if ($isAdmin) {
                     <?php if (!empty($historico_manutencoes)): ?>
                         <?php foreach ($historico_manutencoes as $manutencao): ?>
                             <tr>
+                                <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
                                 <td>
                                     <?php 
                                         if ($manutencao['equipamento_tipo'] == 'Aeronave') {
@@ -166,9 +184,7 @@ if ($isAdmin) {
                                     ?>
                                 </td>
                                 <td><?php echo htmlspecialchars($manutencao['tipo_manutencao']); ?></td>
-                                <td><?php echo date("d/m/Y", strtotime($manutencao['data_manutencao'])); ?></td>
                                 <td><?php echo htmlspecialchars($manutencao['responsavel']); ?></td>
-                                <td><?php echo htmlspecialchars($manutencao['documento_servico'] ?? 'N/A'); ?></td>
                                 <td><?php echo !empty($manutencao['garantia_ate']) ? date("d/m/Y", strtotime($manutencao['garantia_ate'])) : 'N/A'; ?></td>
                                 <td title="<?php echo htmlspecialchars($manutencao['descricao']); ?>">
                                     <?php echo htmlspecialchars(substr($manutencao['descricao'], 0, 50)) . (strlen($manutencao['descricao']) > 50 ? '...' : ''); ?>
@@ -179,9 +195,7 @@ if ($isAdmin) {
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr>
-                            <td colspan="8">Nenhum registro de manutenção encontrado para sua OBM.</td>
-                        </tr>
+                        <tr><td colspan="7">Nenhum registro de manutenção encontrado para sua OBM.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
