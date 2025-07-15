@@ -5,7 +5,7 @@ session_start(); // Inicia a sessão para armazenar informações do usuário
 $servername = "localhost";
 $username = "root";
 $password = "";
-$dbname = "drone_db";
+$dbname = "drones_db";
 
 $login_error = ""; // Variável para armazenar mensagens de erro de login
 

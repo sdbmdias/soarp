@@ -98,7 +98,26 @@ if ($stmt_pilotos) {
 // A conexão com o BD é fechada no footer.php
 ?>
 <div class="main-content">
-    <h1>Lista de Pilotos <?php echo ($isPiloto && !empty($logged_in_pilot_crbm)) ? ' - CRBM ' . htmlspecialchars($logged_in_pilot_crbm) : ''; ?></h1>
+    <?php
+    $title_crbm_suffix = '';
+    $current_crbm_filter = '';
+
+    // Prioriza o filtro da URL se existir, senão usa o CRBM do piloto logado
+    if (isset($_GET['crbm']) && !empty($_GET['crbm'])) {
+        $current_crbm_filter = $_GET['crbm'];
+    } else if ($isPiloto && !empty($logged_in_pilot_crbm)) {
+        $current_crbm_filter = $logged_in_pilot_crbm;
+    }
+
+    if (!empty($current_crbm_filter)) {
+        if ($current_crbm_filter === 'GOST') {
+            $title_crbm_suffix = ' - GOST';
+        } else {
+            $title_crbm_suffix = ' - CRBM ' . htmlspecialchars($current_crbm_filter);
+        }
+    }
+    ?>
+    <h1>Lista de Pilotos<?php echo $title_crbm_suffix; ?></h1>
     
     <?php if(!empty($mensagem_status)) echo $mensagem_status; ?>
 
@@ -146,7 +165,7 @@ if ($stmt_pilotos) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="<?php echo $isAdmin ? '8' : '7'; ?>">Nenhum piloto encontrado<?php echo ($isPiloto && !empty($logged_in_pilot_crbm)) ? ' para o CRBM ' . htmlspecialchars($logged_in_pilot_crbm) : ''; ?>.</td>
+                        <td colspan="<?php echo $isAdmin ? '8' : '7'; ?>">Nenhum piloto encontrado<?php echo $title_crbm_suffix; ?>.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

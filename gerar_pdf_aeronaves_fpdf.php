@@ -5,8 +5,6 @@ require_once 'libs/fpdf/fpdf.php';
 
 // 2. Lógica para buscar os dados das aeronaves
 $aeronaves = [];
-// Assumindo que o PDF será gerado por um administrador, buscando todas as aeronaves.
-// Se fosse para permitir filtros, a lógica aqui seria mais complexa, similar à de pilotos.
 $sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves ORDER BY prefixo ASC";
 $result_aeronaves = $conn->query($sql_aeronaves);
 
@@ -42,10 +40,22 @@ class PDF extends FPDF
         $this->Cell(0,10,utf8_decode('Página ').$this->PageNo().'/{nb}',0,0,'C');
     }
 
-    // NOVO: Método público para acessar a margem de quebra de página automática
+    // Método público para acessar a margem de quebra de página automática
     function GetAutoPageBreakMargin()
     {
         return $this->bMargin;
+    }
+
+    // Método público para acessar a margem esquerda
+    function GetLeftMargin()
+    {
+        return $this->lMargin;
+    }
+
+    // Método público para acessar a margem direita
+    function GetRightMargin()
+    {
+        return $this->rMargin;
     }
 }
 
@@ -56,24 +66,25 @@ $pdf->AddPage();
 $pdf->SetFont('Arial','B',8);
 
 // Definição das larguras das colunas
-// Ajustado para 9 colunas e largura total de aprox 277 (A4 paisagem)
 $w = [30, 45, 30, 35, 30, 25, 20, 25, 30]; 
 
 // Cabeçalho da Tabela
 $header = ['Prefixo', 'Fabricante/Modelo', 'Nº Série', 'SISANT (Val.)', 'Lotação', 'Tipo', 'PMD (kg)', 'Status', 'ANATEL'];
 for($i=0; $i<count($header); $i++) {
-    $pdf->Cell($w[$i], 7, utf8_decode($header[$i]), 1, 0, 'C');
+    $pdf->Cell($w[$i], 7, utf8_decode($header[$i]), 1, 0, 'C'); // Cabeçalhos já centralizados
 }
 $pdf->Ln();
 
 // Dados da Tabela
 $pdf->SetFont('Arial','',7); // Fonte menor para os dados
+$row_height = 6; // Altura padrão da linha de dados
+
 if (!empty($aeronaves)) {
     foreach($aeronaves as $aeronave) {
-        $row_height = 6; // Altura padrão da linha
+        $start_x_row = $pdf->GetX();
+        $start_y_row = $pdf->GetY();
         
         // Adicionar uma nova página se a linha atual exceder o limite
-        // Correção: Agora usa o método público GetAutoPageBreakMargin()
         if($pdf->GetY() + $row_height > ($pdf->GetPageHeight() - $pdf->GetAutoPageBreakMargin())) { 
             $pdf->AddPage();
             $pdf->SetFont('Arial','B',8); // Restaura fonte para cabeçalho
@@ -82,24 +93,55 @@ if (!empty($aeronaves)) {
             }
             $pdf->Ln();
             $pdf->SetFont('Arial','',7); // Restaura fonte para dados
+            $start_x_row = $pdf->GetX(); 
+            $start_y_row = $pdf->GetY();
         }
 
-        $pdf->Cell($w[0], $row_height, utf8_decode($aeronave['prefixo'] ?? 'N/A'), 'LR', 0, 'C');
-        $pdf->Cell($w[1], $row_height, utf8_decode(($aeronave['fabricante'] ?? 'N/A') . ' / ' . ($aeronave['modelo'] ?? 'N/A')), 'LR', 0, 'C');
-        $pdf->Cell($w[2], $row_height, utf8_decode($aeronave['numero_serie'] ?? 'N/A'), 'LR', 0, 'C');
+        // --- Desenhar Bordas da Linha Completa ---
+        // Desenha a borda inferior para a linha inteira da tabela
+        $pdf->Cell(array_sum($w), $row_height, '', 'B', 0, 'C'); 
+        $pdf->SetXY($start_x_row, $start_y_row); // Volta o cursor para o início da linha
+
+        // Desenha as bordas verticais para cada célula
+        $current_cell_x_border = $start_x_row;
+        foreach ($w as $col_width_border) {
+            $pdf->Cell($col_width_border, $row_height, '', 'LR', 0, 'C'); 
+            $current_cell_x_border += $col_width_border;
+        }
+        $pdf->SetXY($start_x_row, $start_y_row); // Volta o cursor para o início da linha para desenhar o conteúdo
+
+        // --- Desenhar Conteúdo das Células (sem bordas, centralizado) ---
+        // Célula 1: Prefixo
+        $pdf->Cell($w[0], $row_height, utf8_decode($aeronave['prefixo'] ?? 'N/A'), 0, 0, 'C'); 
         
+        // Célula 2: Fabricante/Modelo
+        $pdf->Cell($w[1], $row_height, utf8_decode(($aeronave['fabricante'] ?? 'N/A') . ' / ' . ($aeronave['modelo'] ?? 'N/A')), 0, 0, 'C');
+        
+        // Célula 3: Nº Série
+        $pdf->Cell($w[2], $row_height, utf8_decode($aeronave['numero_serie'] ?? 'N/A'), 0, 0, 'C');
+        
+        // Célula 4: SISANT (Val.)
         $sisant_val = ($aeronave['cadastro_sisant'] ?? 'N/A') . ' (' . (isset($aeronave['validade_sisant']) ? date("d/m/Y", strtotime($aeronave['validade_sisant'])) : 'N/A') . ')';
-        $pdf->Cell($w[3], $row_height, utf8_decode($sisant_val), 'LR', 0, 'C');
+        $pdf->Cell($w[3], $row_height, utf8_decode($sisant_val), 0, 0, 'C');
         
+        // Célula 5: Lotação
         $crbm_formatado = preg_replace('/(\d)(CRBM)/', '$1º $2', $aeronave['crbm'] ?? 'N/A');
         $lotacao = $crbm_formatado . ' / ' . ($aeronave['obm'] ?? 'N/A');
-        $pdf->Cell($w[4], $row_height, utf8_decode($lotacao), 'LR', 0, 'C');
+        $pdf->Cell($w[4], $row_height, utf8_decode($lotacao), 0, 0, 'C');
         
-        $pdf->Cell($w[5], $row_height, utf8_decode(ucfirst(str_replace('_', '-', $aeronave['tipo_drone'] ?? 'N/A'))), 'LR', 0, 'C');
-        $pdf->Cell($w[6], $row_height, utf8_decode($aeronave['pmd_kg'] ?? 'N/A'), 'LR', 0, 'C');
-        $pdf->Cell($w[7], $row_height, utf8_decode(formatarStatusAeronave($aeronave['status'] ?? 'desconhecido')), 'LR', 0, 'C');
-        $pdf->Cell($w[8], $row_height, utf8_decode($aeronave['homologacao_anatel'] ?? 'Não'), 'LR', 0, 'C');
-        $pdf->Ln();
+        // Célula 6: Tipo
+        $pdf->Cell($w[5], $row_height, utf8_decode(ucfirst(str_replace('_', '-', $aeronave['tipo_drone'] ?? 'N/A'))), 0, 0, 'C');
+        
+        // Célula 7: PMD (kg)
+        $pdf->Cell($w[6], $row_height, utf8_decode($aeronave['pmd_kg'] ?? 'N/A'), 0, 0, 'C');
+        
+        // Célula 8: Status
+        $pdf->Cell($w[7], $row_height, utf8_decode(formatarStatusAeronave($aeronave['status'] ?? 'desconhecido')), 0, 0, 'C');
+        
+        // Célula 9: ANATEL
+        $pdf->Cell($w[8], $row_height, utf8_decode($aeronave['homologacao_anatel'] ?? 'Não'), 0, 0, 'C');
+        
+        $pdf->Ln($row_height); // Pular linha com a altura calculada
     }
 } else {
     $pdf->Cell(array_sum($w), 10, utf8_decode('Nenhuma aeronave encontrada'), 1, 1, 'C');
