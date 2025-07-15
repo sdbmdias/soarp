@@ -224,7 +224,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             font-size: 0.9em;
         }
 
-        /* NOVO ESTILO ADICIONADO */
         .org-text {
             margin-top: 25px;
             font-size: 0.8em;
@@ -232,12 +231,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             line-height: 1.4;
         }
         
-        @media (max-width: 768px) {
+        /* ########## MEDIA QUERIES PARA RESPONSIVIDADE ########## */
+
+        @media (max-width: 900px) {
             .image-section {
-                display: none;
+                /* Oculta completamente a coluna de imagens em telas menores */
+                display: none; 
             }
             .login-section {
-                flex: 1;
+                /* Faz a seção de login ocupar toda a largura da tela */
+                flex: 1; 
+                padding: 20px; /* Reduz o espaçamento lateral */
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .login-content {
+                /* Reduz o padding interno da caixa de login em telas muito pequenas */
+                padding: 25px; 
+            }
+            .logo-container img {
+                /* Diminui o tamanho do logo */
+                height: 100px; 
+            }
+            .logo-text {
+                /* Diminui o tamanho da fonte do título */
+                font-size: 2.2em; 
+            }
+            .btn-login {
+                padding: 12px;
+                font-size: 1em;
             }
         }
 
