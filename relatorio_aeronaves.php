@@ -10,18 +10,25 @@ $types = '';
 
 // Adiciona filtro por CRBM se o parâmetro estiver presente na URL
 if (isset($_GET['crbm']) && !empty($_GET['crbm'])) {
-    $where_clauses[] = "crbm = ?";
+    $where_clauses[] = "a.crbm = ?";
     $params[] = $_GET['crbm'];
     $types .= 's';
 }
 
-$sql_aeronaves = "SELECT id, prefixo, fabricante, modelo, numero_serie, cadastro_sisant, validade_sisant, crbm, obm, tipo_drone, pmd_kg, status, homologacao_anatel FROM aeronaves";
+// SQL para buscar aeronaves e seus dados de logbook
+$sql_aeronaves = "SELECT 
+    a.id, a.prefixo, a.fabricante, a.modelo, a.numero_serie, a.cadastro_sisant, a.validade_sisant, 
+    a.crbm, a.obm, a.tipo_drone, a.pmd_kg, a.status, a.homologacao_anatel,
+    COALESCE(al.distancia_total_acumulada, 0) AS distancia_total_acumulada,
+    COALESCE(al.tempo_voo_total_acumulado, 0) AS tempo_voo_total_acumulada
+    FROM aeronaves a
+    LEFT JOIN aeronaves_logbook al ON a.id = al.aeronave_id"; // LEFT JOIN para incluir dados de logbook
 
 if (!empty($where_clauses)) {
     $sql_aeronaves .= " WHERE " . implode(' AND ', $where_clauses);
 }
 
-$sql_aeronaves .= " ORDER BY prefixo ASC";
+$sql_aeronaves .= " ORDER BY a.prefixo ASC";
 
 // Prepara e executa a consulta
 $stmt_aeronaves = $conn->prepare($sql_aeronaves);
@@ -42,6 +49,23 @@ if ($stmt_aeronaves) {
     die("Erro na preparação da consulta de aeronaves: " . $conn->error);
 }
 $conn->close(); // Fechar conexão após todas as consultas necessárias
+
+// Funções de formatação de tempo e distância (copiadas de outros arquivos para reuso)
+function formatarTempoVooCompleto($segundos) {
+    if ($segundos <= 0) return '0min';
+    $horas = floor($segundos / 3600);
+    $minutos = floor(($segundos % 3600) / 60);
+    $resultado = '';
+    if ($horas > 0) $resultado .= $horas . 'h ';
+    if ($minutos > 0) $resultado .= $minutos . 'min';
+    return trim($resultado) ?: '0min';
+}
+
+function formatarDistancia($metros) {
+    // Convertendo para KM e formatando com duas casas decimais, vírgula e sem separador de milhares.
+    $distancia_km = $metros / 1000;
+    return number_format($distancia_km, 2, ',', '') . ' km';
+}
 ?>
 <style>
 /* Adiciona uma dica visual para rolagem em telas pequenas */
@@ -69,7 +93,9 @@ $conn->close(); // Fechar conexão após todas as consultas necessárias
         if ($current_crbm_filter === 'GOST') {
             $title_crbm_suffix = ' - GOST';
         } else {
-            $title_crbm_suffix = ' - CRBM ' . htmlspecialchars($current_crbm_filter);
+            // Aplica a formatação do CRBM para o título
+            $formatted_crbm_title = preg_replace('/(\d)(CRBM)/', '$1º $2', $current_crbm_filter);
+            $title_crbm_suffix = ' - ' . htmlspecialchars($formatted_crbm_title);
         }
     }
     ?>
@@ -81,13 +107,10 @@ $conn->close(); // Fechar conexão após todas as consultas necessárias
                 <tr>
                     <th>Prefixo</th>
                     <th>Fabricante/Modelo</th>
-                    <th>Nº Série</th>
-                    <th>SISANT (Val.)</th>
                     <th>Lotação (CRBM/OBM)</th>
-                    <th>Tipo</th>
-                    <th>PMD (kg)</th>
                     <th>Status</th>
-                    <th>ANATEL</th>
+                    <th>Distância Total</th>
+                    <th>Tempo de Voo Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -96,26 +119,12 @@ $conn->close(); // Fechar conexão após todas as consultas necessárias
                         <tr>
                             <td><?php echo htmlspecialchars($aeronave['prefixo'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars(($aeronave['fabricante'] ?? 'N/A') . ' / ' . ($aeronave['modelo'] ?? 'N/A')); ?></td>
-                            <td><?php echo htmlspecialchars($aeronave['numero_serie'] ?? 'N/A'); ?></td>
-                            <td>
-                                <?php
-                                $sisant = $aeronave['cadastro_sisant'] ?? 'N/A';
-                                $raw_validade = $aeronave['validade_sisant'] ?? null; // Obtém o valor bruto
-                                $validade_formatada = 'N/A'; // Inicializa a variável
-                                if (!empty($raw_validade)) { // Verifica se há um valor antes de formatar
-                                    $validade_formatada = date("d/m/Y", strtotime($raw_validade));
-                                }
-                                echo htmlspecialchars($sisant) . ' (' . htmlspecialchars($validade_formatada) . ')';
-                                ?>
-                            </td>
                             <td>
                                 <?php 
                                     $crbm_formatado = preg_replace('/(\d)(CRBM)/', '$1º $2', $aeronave['crbm'] ?? 'N/A');
                                     echo htmlspecialchars($crbm_formatado . ' / ' . ($aeronave['obm'] ?? 'N/A'));
                                 ?>
                             </td>
-                            <td><?php echo htmlspecialchars(ucfirst(str_replace('_', '-', $aeronave['tipo_drone'] ?? 'N/A'))); ?></td>
-                            <td><?php echo htmlspecialchars($aeronave['pmd_kg'] ?? 'N/A'); ?></td>
                             <td>
                                 <?php
                                 $status_map = ['ativo' => 'Ativa', 'em_manutencao' => 'Em Manutenção', 'baixada' => 'Baixada', 'adida' => 'Adida'];
@@ -124,12 +133,13 @@ $conn->close(); // Fechar conexão após todas as consultas necessárias
                                 ?>
                                 <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
                             </td>
-                            <td><?php echo htmlspecialchars($aeronave['homologacao_anatel'] ?? 'Não'); ?></td>
+                            <td><?php echo formatarDistancia($aeronave['distancia_total_acumulada'] ?? 0); ?></td>
+                            <td><?php echo formatarTempoVooCompleto($aeronave['tempo_voo_total_acumulado'] ?? 0); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="9">Nenhuma aeronave encontrada<?php echo $title_crbm_suffix; ?>.</td>
+                        <td colspan="6">Nenhuma aeronave encontrada<?php echo $title_crbm_suffix; ?>.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

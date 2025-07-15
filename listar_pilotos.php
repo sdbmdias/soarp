@@ -131,7 +131,9 @@ if ($stmt_pilotos) {
                     <th>CRBM</th>
                     <th>OBM</th>
                     <th>Status</th>
+                    <?php if ($isAdmin): // Coluna Tipo Usuário visível apenas para Admin ?>
                     <th>Tipo Usuário</th>
+                    <?php endif; ?>
                     <?php if ($isAdmin): ?>
                     <th>Ações</th>
                     <?php endif; ?>
@@ -154,7 +156,9 @@ if ($stmt_pilotos) {
                                 ?>
                                 <span class="status-<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars($status_texto); ?></span>
                             </td>
+                            <?php if ($isAdmin): // Dados do Tipo Usuário visíveis apenas para Admin ?>
                             <td><?php echo htmlspecialchars(ucfirst($piloto['tipo_usuario'] ?? 'N/A')); ?></td>
+                            <?php endif; ?>
                             <?php if ($isAdmin): ?>
                             <td class="action-buttons">
                                 <a href="editar_pilotos.php?id=<?php echo $piloto['id']; ?>" class="edit-btn">Editar</a>
