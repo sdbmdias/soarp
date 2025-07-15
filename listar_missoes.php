@@ -4,6 +4,25 @@ require_once 'includes/header.php';
 
 $mensagem_status = "";
 
+// Lógica para buscar o CRBM do piloto logado, se for um piloto
+$logged_in_pilot_crbm = '';
+if ($isPiloto && isset($_SESSION['user_id'])) {
+    $stmt_crbm = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
+    if ($stmt_crbm) {
+        $stmt_crbm->bind_param("i", $_SESSION['user_id']);
+        $stmt_crbm->execute();
+        $result_crbm = $stmt_crbm->get_result();
+        if ($result_crbm->num_rows > 0) {
+            $logged_in_pilot_crbm = $result_crbm->fetch_assoc()['crbm_piloto'];
+        }
+        $stmt_crbm->close();
+    } else {
+        // Erro na preparação da consulta do CRBM
+        error_log("Erro na preparação da consulta de CRBM do piloto para missões: " . $conn->error);
+    }
+}
+
+
 // --- LÓGICA DE EXCLUSÃO (APENAS PARA ADMINS) ---
 if ($isAdmin && isset($_GET['delete_id'])) {
     $missao_id_para_excluir = intval($_GET['delete_id']);
@@ -11,43 +30,67 @@ if ($isAdmin && isset($_GET['delete_id'])) {
     $conn->begin_transaction();
     try {
         $stmt_get_data = $conn->prepare("SELECT aeronave_id, total_distancia_percorrida, total_tempo_voo FROM missoes WHERE id = ?");
-        $stmt_get_data->bind_param("i", $missao_id_para_excluir);
-        $stmt_get_data->execute();
-        $result_data = $stmt_get_data->get_result();
-        $missao_data = $result_data->fetch_assoc();
-        $stmt_get_data->close();
+        if ($stmt_get_data) {
+            $stmt_get_data->bind_param("i", $missao_id_para_excluir);
+            $stmt_get_data->execute();
+            $result_data = $stmt_get_data->get_result();
+            $missao_data = $result_data->fetch_assoc();
+            $stmt_get_data->close();
+        } else {
+            throw new Exception("Erro na preparação para obter dados da missão para exclusão: " . $conn->error);
+        }
 
         if ($missao_data) {
             
             // Excluir coordenadas primeiro, que dependem dos gpx_files
             $stmt_delete_coords = $conn->prepare("DELETE FROM missao_coordenadas WHERE gpx_file_id IN (SELECT id FROM missoes_gpx_files WHERE missao_id = ?)");
-            $stmt_delete_coords->bind_param("i", $missao_id_para_excluir);
-            $stmt_delete_coords->execute();
-            $stmt_delete_coords->close();
+            if ($stmt_delete_coords) {
+                $stmt_delete_coords->bind_param("i", $missao_id_para_excluir);
+                $stmt_delete_coords->execute();
+                $stmt_delete_coords->close();
+            } else {
+                throw new Exception("Erro na preparação para excluir coordenadas da missão: " . $conn->error);
+            }
 
             // Excluir ficheiros GPX
             $stmt_delete_gpx = $conn->prepare("DELETE FROM missoes_gpx_files WHERE missao_id = ?");
-            $stmt_delete_gpx->bind_param("i", $missao_id_para_excluir);
-            $stmt_delete_gpx->execute();
-            $stmt_delete_gpx->close();
+            if ($stmt_delete_gpx) {
+                $stmt_delete_gpx->bind_param("i", $missao_id_para_excluir);
+                $stmt_delete_gpx->execute();
+                $stmt_delete_gpx->close();
+            } else {
+                throw new Exception("Erro na preparação para excluir arquivos GPX da missão: " . $conn->error);
+            }
 
             // Excluir associações de pilotos
             $stmt_delete_pilots = $conn->prepare("DELETE FROM missoes_pilotos WHERE missao_id = ?");
-            $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
-            $stmt_delete_pilots->execute();
-            $stmt_delete_pilots->close();
+            if ($stmt_delete_pilots) {
+                $stmt_delete_pilots->bind_param("i", $missao_id_para_excluir);
+                $stmt_delete_pilots->execute();
+                $stmt_delete_pilots->close();
+            } else {
+                throw new Exception("Erro na preparação para excluir pilotos da missão: " . $conn->error);
+            }
             
             // Reverter o logbook da aeronave
             $stmt_update_logbook = $conn->prepare("UPDATE aeronaves_logbook SET distancia_total_acumulada = GREATEST(0, distancia_total_acumulada - ?), tempo_voo_total_acumulado = GREATEST(0, tempo_voo_total_acumulado - ?) WHERE aeronave_id = ?");
-            $stmt_update_logbook->bind_param("ddi", $missao_data['total_distancia_percorrida'], $missao_data['total_tempo_voo'], $missao_data['aeronave_id']);
-            $stmt_update_logbook->execute();
-            $stmt_update_logbook->close();
+            if ($stmt_update_logbook) {
+                $stmt_update_logbook->bind_param("ddi", $missao_data['total_distancia_percorrida'], $missao_data['total_tempo_voo'], $missao_data['aeronave_id']);
+                $stmt_update_logbook->execute();
+                $stmt_update_logbook->close();
+            } else {
+                throw new Exception("Erro na preparação para reverter logbook da aeronave: " . $conn->error);
+            }
 
             // Finalmente, excluir a missão
             $stmt_delete_mission = $conn->prepare("DELETE FROM missoes WHERE id = ?");
-            $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
-            $stmt_delete_mission->execute();
-            $stmt_delete_mission->close();
+            if ($stmt_delete_mission) {
+                $stmt_delete_mission->bind_param("i", $missao_id_para_excluir);
+                $stmt_delete_mission->execute();
+                $stmt_delete_mission->close();
+            } else {
+                throw new Exception("Erro na preparação para excluir a missão: " . $conn->error);
+            }
             
             $conn->commit();
             $mensagem_status = "<div class='success-message-box'>Missão #" . $missao_id_para_excluir . " e todos os seus dados foram excluídos com sucesso.</div>";
@@ -60,8 +103,19 @@ if ($isAdmin && isset($_GET['delete_id'])) {
     }
 }
 
-// --- LÓGICA PARA BUSCAR AS MISSÕES COM ORDENAÇÃO DE PILOTOS CORRIGIDA ---
+// --- LÓGICA PARA BUSCAR AS MISSÕES COM FILTRO CRBM E ORDENAÇÃO DE PILOTOS CORRIGIDA ---
 $missoes = [];
+$where_clauses = [];
+$params = [];
+$types = '';
+
+// Se for piloto, filtra por CRBM da aeronave associada
+if ($isPiloto && !empty($logged_in_pilot_crbm)) {
+    $where_clauses[] = "a.crbm = ?";
+    $params[] = $logged_in_pilot_crbm;
+    $types .= 's';
+}
+
 $sql_missoes = "
     SELECT 
         m.id, m.data, m.descricao_operacao, m.rgo_ocorrencia, m.total_tempo_voo,
@@ -79,15 +133,29 @@ $sql_missoes = "
     FROM missoes m
     JOIN aeronaves a ON m.aeronave_id = a.id
     LEFT JOIN missoes_pilotos mp ON m.id = mp.missao_id
-    LEFT JOIN pilotos p ON mp.piloto_id = p.id
-    GROUP BY m.id
-    ORDER BY m.data DESC, m.id DESC
-";
-$result_missoes = $conn->query($sql_missoes);
-if ($result_missoes) {
-    while($row = $result_missoes->fetch_assoc()) {
-        $missoes[] = $row;
+    LEFT JOIN pilotos p ON mp.piloto_id = p.id";
+
+if (!empty($where_clauses)) {
+    $sql_missoes .= " WHERE " . implode(' AND ', $where_clauses);
+}
+
+$sql_missoes .= " GROUP BY m.id ORDER BY m.data DESC, m.id DESC";
+
+$stmt_missoes = $conn->prepare($sql_missoes);
+if ($stmt_missoes) {
+    if (!empty($params)) {
+        $stmt_missoes->bind_param($types, ...$params);
     }
+    $stmt_missoes->execute();
+    $result_missoes = $stmt_missoes->get_result();
+    if ($result_missoes) {
+        while($row = $result_missoes->fetch_assoc()) {
+            $missoes[] = $row;
+        }
+    }
+    $stmt_missoes->close();
+} else {
+    die("Erro na preparação da consulta de missões: " . $conn->error);
 }
 
 function formatarTempoVoo($segundos) {
@@ -110,7 +178,26 @@ function formatarTempoVoo($segundos) {
 </style>
 <div class="main-content">
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-        <h1>Logbook de Missões</h1>
+        <?php
+        $title_crbm_suffix = '';
+        $current_crbm_filter = '';
+
+        // Prioriza o filtro da URL se existir, senão usa o CRBM do piloto logado
+        if (isset($_GET['crbm']) && !empty($_GET['crbm'])) {
+            $current_crbm_filter = $_GET['crbm'];
+        } else if ($isPiloto && !empty($logged_in_pilot_crbm)) {
+            $current_crbm_filter = $logged_in_pilot_crbm;
+        }
+
+        if (!empty($current_crbm_filter)) {
+            if ($current_crbm_filter === 'GOST') {
+                $title_crbm_suffix = ' - GOST';
+            } else {
+                $title_crbm_suffix = ' - CRBM ' . htmlspecialchars($current_crbm_filter);
+            }
+        }
+        ?>
+        <h1>Logbook de Missões<?php echo $title_crbm_suffix; ?></h1>
         <a href="cadastro_missao.php" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #28a745; color: #fff;">
             <i class="fas fa-plus"></i> Adicionar Nova Missão
         </a>
@@ -153,7 +240,7 @@ function formatarTempoVoo($segundos) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6">Nenhuma missão encontrada. Clique em "Adicionar Nova Missão" para começar.</td>
+                        <td colspan="6">Nenhuma missão encontrada<?php echo $title_crbm_suffix; ?>. Clique em "Adicionar Nova Missão" para começar.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

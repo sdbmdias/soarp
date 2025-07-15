@@ -75,17 +75,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SYSARP - Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/main.css">
     <style>
-        body {
-            margin: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-            overflow: hidden;
-        }
-
-        /* Coluna da Esquerda (Imagens) */
+        /* Estilos específicos para index.php que NÃO estão no main.css */
         .image-section {
             flex: 1;
             display: flex;
@@ -97,7 +89,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-position: center;
         }
 
-        /* Coluna da Direita (Login) */
         .login-section {
             flex: 2;
             display: flex;
@@ -115,7 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.3);
+            background-color: var(--color-content-bg-translucent-light); /* Usando variável CSS */
             z-index: 1;
         }
         
@@ -124,10 +115,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             z-index: 2;
             width: 100%;
             max-width: 400px;
-            background-color: rgba(255, 255, 255, 0.85);
+            background-color: var(--color-content-bg-translucent-heavy); /* Usando variável CSS */
             padding: 40px;
             border-radius: 8px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 8px 30px var(--color-box-shadow-medium); /* Usando variável CSS */
             text-align: center;
         }
 
@@ -143,7 +134,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .logo-text {
             font-size: 2.8em;
             font-weight: bold;
-            color: #c0392b;
+            color: var(--color-primary); /* Usando variável CSS */
             letter-spacing: 2px;
         }
 
@@ -156,7 +147,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
-            color: #555;
+            color: var(--color-text-medium); /* Usando variável CSS */
         }
         
         .input-with-icon {
@@ -168,56 +159,51 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .input-with-icon .icon {
             position: absolute;
             left: 15px;
-            color: #888;
+            color: var(--color-text-light); /* Usando variável CSS */
         }
 
         .input-group input {
-            width: 100%;
-            padding: 12px 15px 12px 45px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1em;
-            box-sizing: border-box;
-            transition: border-color 0.3s;
+            padding-left: 45px; /* Ajusta o padding para o ícone */
         }
-
+        /* Remover:
         .input-group input:focus {
             outline: none;
-            border-color: #c0392b;
+            border-color: var(--color-primary);
         }
+        Isso já está no main.css de forma global
+        */
 
         .btn-login {
             width: 100%;
-            padding: 14px;
-            background-color: #c0392b;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s;
             margin-top: 10px;
         }
-
+        /* Remover:
         .btn-login:hover {
-            background-color: #a93226;
+            background-color: var(--color-primary-hover);
         }
+        Isso já está no main.css de forma global
+        */
         
         .forgot-password-link {
             display: block;
             margin-top: 20px;
             font-size: 0.9em;
-            color: #555;
-            text-decoration: none;
+            color: var(--color-text-medium); /* Usando variável CSS */
         }
+        /* Remover:
         .forgot-password-link:hover {
             text-decoration: underline;
         }
+        Isso já está no main.css de forma global
+        */
 
         .error-message {
+            /* Mudar:
             background-color: #f8d7da;
             color: #721c24;
+            Para usar variáveis CSS */
+            background-color: var(--color-error-background);
+            color: var(--color-error-text);
             padding: 12px;
             border-radius: 5px;
             margin-bottom: 20px;
@@ -227,7 +213,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .org-text {
             margin-top: 25px;
             font-size: 0.8em;
-            color: #666;
+            color: var(--color-text-lighter); /* Usando variável CSS */
             line-height: 1.4;
         }
         
@@ -235,27 +221,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         @media (max-width: 900px) {
             .image-section {
-                /* Oculta completamente a coluna de imagens em telas menores */
                 display: none; 
             }
             .login-section {
-                /* Faz a seção de login ocupar toda a largura da tela */
                 flex: 1; 
-                padding: 20px; /* Reduz o espaçamento lateral */
+                padding: 20px; 
             }
         }
         
         @media (max-width: 480px) {
             .login-content {
-                /* Reduz o padding interno da caixa de login em telas muito pequenas */
                 padding: 25px; 
             }
             .logo-container img {
-                /* Diminui o tamanho do logo */
                 height: 100px; 
             }
             .logo-text {
-                /* Diminui o tamanho da fonte do título */
                 font-size: 2.2em; 
             }
             .btn-login {
@@ -263,7 +244,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 font-size: 1em;
             }
         }
-
     </style>
 </head>
 <body>

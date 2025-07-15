@@ -101,13 +101,14 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['report_type'])) {
         case 'manutencao':
             // Lógica para relatório de manutenção (mantida)
             $report_title = "Relatório de Manutenções";
-            $sql = "SELECT m.data_manutencao, m.tipo_manutencao, m.responsavel,
-                        CASE WHEN m.equipamento_tipo = 'Aeronave' THEN CONCAT('Aeronave: ', a.prefixo)
-                             WHEN m.equipamento_tipo = 'Controle' THEN CONCAT('Controle: ', c.numero_serie)
+            $sql = "SELECT m.data_manutencao, m.tipo_manutencao, m.responsavel, m.valor, m.garantia_ate,
+                        CASE WHEN m.equipamento_tipo = 'Aeronave' THEN CONCAT('Aeronave: ', a.prefixo, ' (', a.modelo, ')')
+                             WHEN m.equipamento_tipo = 'Controle' THEN CONCAT('Controle: ', c.numero_serie, ' (', c.modelo, IFNULL(CONCAT(' vinc. a ', av.prefixo), ''), ')')
                         END as equipamento, m.descricao
                     FROM manutencoes m
                     LEFT JOIN aeronaves a ON m.equipamento_id = a.id AND m.equipamento_tipo = 'Aeronave'
-                    LEFT JOIN controles c ON m.equipamento_id = c.id AND m.equipamento_tipo = 'Controle'";
+                    LEFT JOIN controles c ON m.equipamento_id = c.id AND m.equipamento_tipo = 'Controle'
+                    LEFT JOIN aeronaves av ON c.aeronave_id = av.id"; // Adicionado JOIN para aeronave vinculada ao controle
             
             if (!empty($_GET['data_inicio_man'])) { $where_clauses[] = "m.data_manutencao >= ?"; $params[] = $_GET['data_inicio_man']; $types .= 's'; }
             if (!empty($_GET['data_fim_man'])) { $where_clauses[] = "m.data_manutencao <= ?"; $params[] = $_GET['data_fim_man']; $types .= 's'; }
@@ -122,7 +123,7 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['report_type'])) {
             if (!in_array($sort_column, $allowed_sort_manutencao)) $sort_column = 'data_manutencao';
             $sql .= " ORDER BY $sort_column $sort_order";
 
-            $colunas = ['data_manutencao' => 'Data', 'tipo_manutencao' => 'Tipo', 'equipamento' => 'Equipamento', 'responsavel' => 'Responsável', 'descricao' => 'Descrição'];
+            $colunas = ['data_manutencao' => 'Data', 'tipo_manutencao' => 'Tipo', 'equipamento' => 'Equipamento', 'responsavel' => 'Responsável', 'garantia_ate' => 'Garantia até', 'valor' => 'Valor (R$)', 'descricao' => 'Descrição'];
             $colunas_a_exibir = array_keys($colunas);
             break;
     }
@@ -157,6 +158,22 @@ function get_sort_report_link($column, $current_column, $current_order) {
 .data-table th a { color: inherit; text-decoration: none; display: flex; align-items: center; justify-content: space-between; }
 .data-table th a:hover { color: #0056b3; }
 .data-table th .sort-icon { margin-left: 5px; opacity: 0.6; }
+
+/* Novo estilo para o botão Gerar PDF em relatórios */
+.btn-pdf-action {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    display: inline-block; /* Para garantir que padding e margin funcionem */
+    font-size: 0.9em; /* Ajustado para não ser tão grande */
+    transition: background-color 0.3s ease;
+}
+
+.btn-pdf-action:hover {
+    background-color: var(--color-primary-hover);
+}
 </style>
 
 <div class="main-content">
@@ -179,10 +196,29 @@ function get_sort_report_link($column, $current_column, $current_order) {
     <div class="results-container table-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h3><?php echo htmlspecialchars($report_title); ?></h3>
-            <?php if ($report_type == 'pilotos' && !empty($resultados)): ?>
-                <a href="gerar_pdf_pilotos_fpdf.php?<?php echo http_build_query($_GET); ?>" target="_blank" class="button" style="background-color: #c0392b; color: white; text-decoration: none; padding: 8px 12px; border-radius: 5px;">
-                    <i class="fas fa-file-pdf"></i> Gerar PDF
-                </a>
+            <?php if (!empty($resultados)): // Botão só aparece se houver resultados ?>
+                <?php
+                $pdf_link = '';
+                switch ($report_type) {
+                    case 'pilotos':
+                        $pdf_link = 'gerar_pdf_pilotos_fpdf.php';
+                        break;
+                    case 'missoes':
+                        $pdf_link = 'gerar_pdf_missoes_fpdf.php';
+                        break;
+                    case 'aeronaves':
+                        $pdf_link = 'gerar_pdf_aeronaves_fpdf.php';
+                        break;
+                    case 'manutencao':
+                        $pdf_link = 'gerar_pdf_manutencao_fpdf.php';
+                        break;
+                }
+                ?>
+                <?php if (!empty($pdf_link)): ?>
+                    <a href="<?php echo $pdf_link; ?>?<?php echo http_build_query($_GET); ?>" target="_blank" class="btn-pdf-action">
+                        <i class="fas fa-file-pdf"></i> Gerar PDF
+                    </a>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
         <p>Total de registros encontrados: <?php echo count($resultados); ?></p>
@@ -210,7 +246,7 @@ function get_sort_report_link($column, $current_column, $current_order) {
                                 <td>
                                     <?php
                                         $valor = $linha[$col_name];
-                                        if ($col_name === 'data' || $col_name === 'data_manutencao') {
+                                        if ($col_name === 'data' || $col_name === 'data_manutencao' || $col_name === 'garantia_ate') { // Adicionado garantia_ate
                                             echo date("d/m/Y", strtotime($valor));
                                         } elseif ($col_name === 'cpf') {
                                             echo substr($valor, 0, 3) . '.XXX.XXX-' . substr($valor, -2);
@@ -219,7 +255,10 @@ function get_sort_report_link($column, $current_column, $current_order) {
                                             $status_text = ucfirst(str_replace('_', ' ', $valor));
                                             if ($col_name === 'status' && $status_text === 'Ativo') $status_text = 'Ativa';
                                             echo '<span class="status-' . $status_class . '">' . $status_text . '</span>';
-                                        } else {
+                                        } elseif ($col_name === 'valor') { // Formatando valor como moeda
+                                            echo 'R$ ' . number_format($valor, 2, ',', '.');
+                                        }
+                                        else {
                                             echo htmlspecialchars($valor);
                                         }
                                     ?>

@@ -42,8 +42,6 @@ class PDF extends FPDF
     // Cabeçalho
     function Header()
     {
-        // Logo (opcional, adicione a sua imagem em /img/logo.png)
-        // $this->Image('img/logo.png',10,6,30); 
         $this->SetFont('Arial','B',15);
         $this->Cell(80); // Mover para a direita
         $this->Cell(30,10,utf8_decode('Relatório de Pilotos'),0,0,'C');
@@ -56,6 +54,24 @@ class PDF extends FPDF
         $this->SetY(-15); // Posição a 1.5 cm do final
         $this->SetFont('Arial','I',8);
         $this->Cell(0,10,utf8_decode('Página ').$this->PageNo().'/{nb}',0,0,'C');
+    }
+
+    // Método público para acessar a margem de quebra de página automática
+    function GetAutoPageBreakMargin()
+    {
+        return $this->bMargin;
+    }
+
+    // Método público para acessar a margem esquerda
+    function GetLeftMargin()
+    {
+        return $this->lMargin;
+    }
+
+    // Método público para acessar a margem direita
+    function GetRightMargin()
+    {
+        return $this->rMargin;
     }
 }
 
@@ -71,21 +87,66 @@ $w = [35, 60, 25, 20, 20, 25];
 // Cabeçalho da Tabela
 $header = ['Posto/Grad.', 'Nome Completo', 'CPF', 'CRBM', 'OBM', 'Status'];
 for($i=0; $i<count($header); $i++) {
-    $pdf->Cell($w[$i], 7, utf8_decode($header[$i]), 1, 0, 'C');
+    $pdf->Cell($w[$i], 7, utf8_decode($header[$i]), 1, 0, 'C'); // Cabeçalhos já centralizados
 }
 $pdf->Ln();
 
 // Dados da Tabela
 $pdf->SetFont('Arial','',8);
+$row_height = 6; // Altura padrão da linha de dados
+
 if (!empty($resultados)) {
     foreach($resultados as $row) {
-        $pdf->Cell($w[0], 6, utf8_decode($row['posto_graduacao']), 'LR');
-        $pdf->Cell($w[1], 6, utf8_decode($row['nome_completo']), 'LR');
-        $pdf->Cell($w[2], 6, utf8_decode(substr($row['cpf'], 0, 3) . '.XXX.XXX-' . substr($row['cpf'], -2)), 'LR');
-        $pdf->Cell($w[3], 6, utf8_decode($row['crbm_piloto']), 'LR', 0, 'C');
-        $pdf->Cell($w[4], 6, utf8_decode($row['obm_piloto']), 'LR', 0, 'C');
-        $pdf->Cell($w[5], 6, utf8_decode(ucfirst($row['status_piloto'])), 'LR', 0, 'C');
-        $pdf->Ln();
+        $start_x_row = $pdf->GetX();
+        $start_y_row = $pdf->GetY();
+
+        // Adicionar uma nova página se a linha atual exceder o limite
+        if($pdf->GetY() + $row_height > ($pdf->GetPageHeight() - $pdf->GetAutoPageBreakMargin())) { 
+            $pdf->AddPage();
+            $pdf->SetFont('Arial','B',9); // Restaura fonte para cabeçalho
+            for($i=0; $i<count($header); $i++) {
+                $pdf->Cell($w[$i], 7, utf8_decode($header[$i]), 1, 0, 'C');
+            }
+            $pdf->Ln();
+            $pdf->SetFont('Arial','',8); // Restaura fonte para dados
+            $start_x_row = $pdf->GetX(); 
+            $start_y_row = $pdf->GetY();
+        }
+
+        // --- Desenhar Bordas da Linha Completa ---
+        // Desenha a borda inferior para a linha inteira da tabela
+        $pdf->Cell(array_sum($w), $row_height, '', 'B', 0, 'C'); 
+        $pdf->SetXY($start_x_row, $start_y_row); // Volta o cursor para o início da linha
+
+        // Desenha as bordas verticais para cada célula
+        $current_cell_x_border = $start_x_row;
+        foreach ($w as $col_width_border) {
+            $pdf->Cell($col_width_border, $row_height, '', 'LR', 0, 'C'); 
+            $current_cell_x_border += $col_width_border;
+        }
+        $pdf->SetXY($start_x_row, $start_y_row); // Volta o cursor para o início da linha para desenhar o conteúdo
+
+
+        // --- Desenhar Conteúdo das Células (sem bordas, centralizado) ---
+        // Célula 1: Posto/Grad.
+        $pdf->Cell($w[0], $row_height, utf8_decode($row['posto_graduacao']), 0, 0, 'C'); // Alinhado ao centro
+        
+        // Célula 2: Nome Completo
+        $pdf->Cell($w[1], $row_height, utf8_decode($row['nome_completo']), 0, 0, 'C'); // Alinhado ao centro
+
+        // Célula 3: CPF
+        $pdf->Cell($w[2], $row_height, utf8_decode(substr($row['cpf'], 0, 3) . '.XXX.XXX-' . substr($row['cpf'], -2)), 0, 0, 'C'); // Alinhado ao centro
+        
+        // Célula 4: CRBM
+        $pdf->Cell($w[3], $row_height, utf8_decode($row['crbm_piloto']), 0, 0, 'C'); // Já centralizado, mantido 0 border
+        
+        // Célula 5: OBM
+        $pdf->Cell($w[4], $row_height, utf8_decode($row['obm_piloto']), 0, 0, 'C'); // Já centralizado, mantido 0 border
+        
+        // Célula 6: Status
+        $pdf->Cell($w[5], $row_height, utf8_decode(ucfirst($row['status_piloto'])), 0, 0, 'C'); // Já centralizado, mantido 0 border
+        
+        $pdf->Ln($row_height); // Pular linha com a altura calculada
     }
 } else {
     $pdf->Cell(array_sum($w), 10, utf8_decode('Nenhum resultado encontrado'), 1, 1, 'C');

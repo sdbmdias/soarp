@@ -1,6 +1,19 @@
 <?php
 // 1. INCLUI O CABEÇALHO PADRÃO
 require_once 'includes/header.php';
+
+$piloto_crbm = '';
+// Se o usuário logado for um piloto, busca o CRBM dele
+if ($isPiloto && isset($_SESSION['user_id'])) {
+    $stmt = $conn->prepare("SELECT crbm_piloto FROM pilotos WHERE id = ?");
+    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $piloto_crbm = $result->fetch_assoc()['crbm_piloto'];
+    }
+    $stmt->close();
+}
 ?>
 
 <style>
@@ -49,21 +62,43 @@ require_once 'includes/header.php';
     <p>Selecione um tipo de relatório para visualizar os dados detalhados.</p>
 
     <div class="reports-menu">
-        <a href="relatorio_aeronaves.php" class="report-button">
-            <i class="fas fa-plane-departure"></i>
-            <h2>Logbook por Aeronave</h2>
-            <p>Distância e tempo de voo por cada aeronave.</p>
-        </a>
-        <a href="relatorio_pilotos.php" class="report-button">
-            <i class="fas fa-users-cog"></i>
-            <h2>Logbook por Piloto</h2>
-            <p>Horas de voo e distância percorrida por cada piloto.</p>
-        </a>
-        <a href="relatorios_especificos.php" class="report-button">
-            <i class="fas fa-file-alt"></i>
-            <h2>Relatórios Específicos</h2>
-            <p>Gere relatórios personalizados por período e tipo.</p>
-        </a>
+        <?php if ($isAdmin || $isPiloto): // Aparece para Admin e Piloto ?>
+            <?php 
+                $aeronave_link = "relatorio_aeronaves.php";
+                if ($isPiloto && !empty($piloto_crbm)) {
+                    // Adiciona o filtro de CRBM se for piloto
+                    $aeronave_link .= "?crbm=" . urlencode($piloto_crbm);
+                }
+            ?>
+            <a href="<?php echo htmlspecialchars($aeronave_link); ?>" class="report-button">
+                <i class="fas fa-plane-departure"></i>
+                <h2>Logbook por Aeronave</h2>
+                <p>Distância e tempo de voo por cada aeronave.</p>
+            </a>
+        <?php endif; ?>
+
+        <?php if ($isAdmin || $isPiloto): // Aparece para Admin e Piloto ?>
+            <?php 
+                $piloto_link = "relatorio_pilotos.php";
+                if ($isPiloto && !empty($piloto_crbm)) {
+                    // Adiciona o filtro de CRBM se for piloto
+                    $piloto_link .= "?crbm=" . urlencode($piloto_crbm);
+                }
+            ?>
+            <a href="<?php echo htmlspecialchars($piloto_link); ?>" class="report-button">
+                <i class="fas fa-users-cog"></i>
+                <h2>Logbook por Piloto</h2>
+                <p>Horas de voo e distância percorrida por cada piloto.</p>
+            </a>
+        <?php endif; ?>
+
+        <?php if ($isAdmin): // Aparece APENAS para Admin ?>
+            <a href="relatorios_especificos.php" class="report-button">
+                <i class="fas fa-file-alt"></i>
+                <h2>Relatórios Específicos</h2>
+                <p>Gere relatórios personalizados por período e tipo.</p>
+            </a>
+        <?php endif; ?>
     </div>
 </div>
 
