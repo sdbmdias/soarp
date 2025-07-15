@@ -57,7 +57,7 @@ if (isset($_GET['delete_id'])) {
 // Busca todos os documentos para listagem, incluindo o prefixo da aeronave
 $todos_documentos = [];
 $sql_docs = "SELECT 
-                d.id, d.nome_exibicao, d.caminho_arquivo, d.tipo_arquivo, d.data_upload,
+                d.id, d.nome_exibicao, d.caminho_arquivo, d.tipo_arquivo, d.data_upload, d.nome_arquivo_servidor,
                 GROUP_CONCAT(DISTINCT ac.prefixo SEPARATOR ', ') AS aeronaves_associadas,
                 GROUP_CONCAT(DISTINCT da.modelo_aeronave SEPARATOR '||') AS modelos_associados
              FROM documentos d
@@ -124,12 +124,12 @@ foreach ($todos_documentos as $doc) {
         <form action="gerenciar_documentos.php" method="GET">
             <div class="form-group" style="margin: 0;">
                 <label for="q" style="font-size: 1.1em;">Buscar Documentos:</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="display: flex; gap: 10px;">
                     <input type="text" id="q" name="q" placeholder="Digite o nome do documento..." value="<?php echo htmlspecialchars($search_term); ?>" style="flex-grow: 1;">
-                    <button type="submit" class="action-btn" style="background-color: #007bff; border: none; cursor: pointer;">
-                        <i class="fas fa-search"></i><span>Buscar</span>
+                    <button type="submit" class="action-btn" style="background-color: #007bff; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 5px;">
+                        <i class="fas fa-search"></i>
                     </button>
-                    <a href="gerenciar_documentos.php" class="action-btn" style="background-color: #6c757d;">
+                    <a href="gerenciar_documentos.php" class="action-btn" style="background-color: #6c757d; padding: 10px 15px; border-radius: 5px;">
                         Limpar
                     </a>
                 </div>
@@ -265,4 +265,4 @@ foreach ($todos_documentos as $doc) {
 <?php
 // INCLUI O RODAPÉ
 require_once 'includes/footer.php';
-?>  
+?>

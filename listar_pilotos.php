@@ -35,8 +35,8 @@ if ($isAdmin && isset($_GET['delete_id'])) {
 // 3. LÓGICA PARA LISTAR OS PILOTOS
 $pilotos = [];
 
-// Atualiza a consulta para ordenar por graduação
-$sql_pilotos = "SELECT id, posto_graduacao, nome_completo, rg, crbm_piloto, obm_piloto, status_piloto 
+// Atualiza a consulta para ordenar por graduação e buscar o CPF
+$sql_pilotos = "SELECT id, posto_graduacao, nome_completo, cpf, crbm_piloto, obm_piloto, status_piloto 
                 FROM pilotos 
                 ORDER BY
                     CASE posto_graduacao
@@ -61,6 +61,14 @@ if ($result_pilotos) {
     while($row = $result_pilotos->fetch_assoc()) {
         $pilotos[] = $row;
     }
+}
+
+// Função para mascarar o CPF
+function mask_cpf($cpf) {
+    if (empty($cpf) || strlen($cpf) < 11) {
+        return 'Inválido';
+    }
+    return substr($cpf, 0, 3) . '.XXX.XXX-' . substr($cpf, -2);
 }
 ?>
 
@@ -95,7 +103,9 @@ if ($result_pilotos) {
             <thead>
                 <tr>
                     <th>Nome do Piloto</th>
-                    <th>RG</th>
+                    <?php if ($isAdmin): // Mostra a coluna CPF apenas para Admins ?>
+                    <th>CPF</th>
+                    <?php endif; ?>
                     <th>CRBM</th>
                     <th>OBM/Seção</th>
                     <th>Status</th>
@@ -111,7 +121,9 @@ if ($result_pilotos) {
                             <td style="text-align: center;">
                                 <strong><?php echo htmlspecialchars($piloto['posto_graduacao']); ?></strong> <?php echo htmlspecialchars($piloto['nome_completo']); ?>
                             </td>
-                            <td style="text-align: center;"><?php echo htmlspecialchars($piloto['rg']); ?></td>
+                            <?php if ($isAdmin): // Mostra o CPF mascarado apenas para Admins ?>
+                            <td style="text-align: center;"><?php echo htmlspecialchars(mask_cpf($piloto['cpf'])); ?></td>
+                            <?php endif; ?>
                             <td style="text-align: center;"><?php echo htmlspecialchars(preg_replace('/(\d)(CRBM)/', '$1º $2', $piloto['crbm_piloto'])); ?></td>
                             <td style="text-align: center;"><?php echo htmlspecialchars($piloto['obm_piloto']); ?></td>
                             <td style="text-align: center;">
@@ -140,4 +152,4 @@ if ($result_pilotos) {
 <?php
 // 4. INCLUI O RODAPÉ
 require_once 'includes/footer.php';
-?>
+?>  

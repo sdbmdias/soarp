@@ -197,7 +197,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="form-group">
                         <label for="contato_ats">Contato com o Orgão ATS:</label>
                          <select id="contato_ats" name="contato_ats" required onchange="toggleOtherInput(this, 'outro_ats_wrapper')">
-                            <option value="Não se Aplica">Não se Aplica</option>
+                            <option value="Espaço Aéreo Golf (G)">Espaço Aéreo Golf (G)</option>
                             <option value="Telefonia">Telefonia</option>
                             <option value="WhatsApp">WhatsApp</option>
                             <option value="Rádio">Rádio</option>

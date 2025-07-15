@@ -46,7 +46,6 @@ if ($isPiloto) {
 
 // --- LÓGICA DE MODIFICAÇÃO (APENAS ADMIN) ---
 if ($isAdmin) {
-    // (A lógica de UPLOAD e DESASSOCIAR permanece a mesma e já estava correta)
     // Lógica de UPLOAD de novo arquivo e associação
     if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_novo'])) {
         $nome_documento = htmlspecialchars(trim($_POST['nome_documento']));
@@ -128,6 +127,7 @@ $sql_documentos = "
         d.id, 
         d.nome_exibicao, 
         d.caminho_arquivo, 
+        d.nome_arquivo_servidor,
         -- Define o tipo de associação, dando prioridade para 'especifico'
         MIN(CASE 
             WHEN da.aeronave_id = ? THEN 'especifico' 
@@ -136,7 +136,7 @@ $sql_documentos = "
     FROM documentos d
     JOIN documentos_associados da ON d.id = da.documento_id
     WHERE da.aeronave_id = ? OR da.modelo_aeronave = ?
-    GROUP BY d.id, d.nome_exibicao, d.caminho_arquivo
+    GROUP BY d.id, d.nome_exibicao, d.caminho_arquivo, d.nome_arquivo_servidor
     ORDER BY d.nome_exibicao ASC
 ";
 
@@ -222,6 +222,14 @@ $stmt_documentos->close();
             <tbody>
                 <?php if (!empty($documentos_encontrados)): ?>
                     <?php foreach ($documentos_encontrados as $doc): ?>
+                        <?php
+                            // *** INÍCIO DA CORREÇÃO ***
+                            // Garante que o caminho do diretório e o nome do arquivo sejam seguros para URL.
+                            $directory_path = 'uploads/';
+                            $filename = $doc['nome_arquivo_servidor'];
+                            $safe_url = $directory_path . rawurlencode($filename);
+                            // *** FIM DA CORREÇÃO ***
+                        ?>
                         <tr>
                             <td style="text-align: left;"><?php echo htmlspecialchars($doc['nome_exibicao']); ?></td>
                             <?php if ($isAdmin): ?>
@@ -234,10 +242,10 @@ $stmt_documentos->close();
                                 </td>
                             <?php endif; ?>
                             <td class="action-buttons">
-                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="action-btn view-btn" target="_blank">
+                                <a href="<?php echo htmlspecialchars($safe_url, ENT_QUOTES, 'UTF-8'); ?>" class="action-btn view-btn" target="_blank">
                                     <i class="fas fa-eye"></i> Visualizar
                                 </a>
-                                <a href="<?php echo htmlspecialchars($doc['caminho_arquivo']); ?>" class="action-btn download-btn" download>
+                                <a href="<?php echo htmlspecialchars($safe_url, ENT_QUOTES, 'UTF-8'); ?>" class="action-btn download-btn" download>
                                     <i class="fas fa-download"></i> Baixar
                                 </a>
                                 <?php if ($isAdmin): ?>

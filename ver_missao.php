@@ -17,7 +17,7 @@ if ($missao_id <= 0) {
 $sql_details = "
     SELECT 
         m.*,
-        a.prefixo AS aeronave_prefixo, a.modelo AS aeronave_modelo, a.obm AS aeronave_obm
+        a.prefixo AS aeronave_prefixo, a.modelo AS aeronave_modelo, a.obm AS aeronave_obm, a.id as aeronave_id
     FROM missoes m
     JOIN aeronaves a ON m.aeronave_id = a.id
     WHERE m.id = ?
@@ -135,18 +135,45 @@ function formatarDistancia($metros) {
     #map-legend {
         position: absolute;
         top: 10px;
-        left: 10px; /* CORREÇÃO: Movido para a esquerda */
+        left: 10px;
         background: rgba(255, 255, 255, 0.9);
-        padding: 10px;
+        padding: 5px 10px;
         border-radius: 5px;
         border: 1px solid #ccc;
         font-family: Arial, sans-serif;
         font-size: 14px;
         z-index: 1;
+        max-width: 200px;
     }
-    #map-legend h4 {
-        margin: 0 0 5px 0;
-        text-align: center;
+    .legend-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+    .legend-header h4 {
+        margin: 0;
+        padding-right: 10px;
+    }
+    .legend-toggle-btn {
+        background: none;
+        border: none;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        color: #333;
+    }
+    #legend-content {
+        margin-top: 5px;
+        transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        max-height: 300px; /* Altura suficiente para os itens */
+        overflow: hidden;
+    }
+    #map-legend.collapsed #legend-content {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
     }
     .legend-item {
         display: flex;
@@ -175,7 +202,13 @@ function formatarDistancia($metros) {
                 <legend>Mapa da Trajetória</legend>
                 <div id='map-container' style='position: relative;'>
                     <div id='map' style='width: 100%; height: 450px; border-radius: 5px;'></div>
-                    <div id='map-legend' style="display: none;"><h4>Legenda de Voos</h4></div>
+                    <div id='map-legend' style="display: none;">
+                        <div id="legend-header" class="legend-header">
+                           <h4>Legenda</h4>
+                           <button id="legend-toggle-btn" class="legend-toggle-btn"><i class="fas fa-minus"></i></button>
+                        </div>
+                        <div id="legend-content"></div>
+                    </div>
                 </div>
             </fieldset>
 
@@ -314,16 +347,30 @@ document.addEventListener('DOMContentLoaded', function () {
         map.addControl(new mapboxgl.NavigationControl());
         
         const legend = document.getElementById('map-legend');
+        const legendHeader = document.getElementById('legend-header');
+        const legendToggleBtn = document.getElementById('legend-toggle-btn');
+        const legendContent = document.getElementById('legend-content');
+
         const bounds = new mapboxgl.LngLatBounds();
-        // CORREÇÃO: Paleta de cores expandida para evitar repetições
         const colors = [
             '#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#A133FF', '#33FFA1', 
             '#FFC300', '#DAF7A6', '#C70039', '#900C3F', '#581845', '#FF8C00',
             '#00FFFF', '#FF00FF', '#7CFC00', '#8A2BE2', '#00BFFF', '#ADFF2F'
         ];
 
+        legendHeader.addEventListener('click', () => {
+            legend.classList.toggle('collapsed');
+            const icon = legendToggleBtn.querySelector('i');
+            if (legend.classList.contains('collapsed')) {
+                icon.classList.remove('fa-minus');
+                icon.classList.add('fa-plus');
+            } else {
+                icon.classList.remove('fa-plus');
+                icon.classList.add('fa-minus');
+            }
+        });
+
         map.on('load', () => {
-            // Mostra a legenda apenas se houver trajetórias
             legend.style.display = 'block';
 
             todasAsTrajetorias.forEach((trajetoria, index) => {
@@ -351,7 +398,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const legendLabel = document.createTextNode(` Voo ${index + 1}`);
                 legendItem.appendChild(legendKey);
                 legendItem.appendChild(legendLabel);
-                legend.appendChild(legendItem);
+                legendContent.appendChild(legendItem);
 
                 // Adicionar marcadores de início e fim
                 new mapboxgl.Marker({ color: '#28a745' }).setLngLat(trajetoria[0]).setPopup(new mapboxgl.Popup().setText(`Início do Voo ${index + 1}`)).addTo(map);
