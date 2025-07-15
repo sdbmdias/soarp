@@ -193,6 +193,11 @@ function formatarDistancia($metros) {
 <div class="main-content">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
         <h1>Detalhes da Missão <?php echo !empty($missao_details['rgo_ocorrencia']) ? 'RGO ' . htmlspecialchars($missao_details['rgo_ocorrencia']) : '#' . $missao_id; ?></h1>
+        <?php if ($missao_details): // Botão Gerar PDF só se a missão for encontrada ?>
+            <a href="gerar_pdf_detalhes_missao.php?id=<?php echo $missao_id; ?>" target="_blank" class="form-actions button" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #c0392b; color: #fff;">
+                <i class="fas fa-file-pdf"></i> Gerar PDF
+            </a>
+        <?php endif; ?>
     </div>
 
     <div class="form-container">

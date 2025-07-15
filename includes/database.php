@@ -8,7 +8,7 @@
 $servername = "localhost";
 $username = "root";
 $password = "";
-$dbname = "drones_db";
+$dbname = "drone_db";
 
 // Cria a conexão
 $conn = new mysqli($servername, $username, $password, $dbname);
