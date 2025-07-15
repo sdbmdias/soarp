@@ -1,9 +1,19 @@
 <?php
-// PASSO ESSENCIAL: Carrega todas as bibliotecas instaladas pelo Composer
-require_once 'vendor/autoload.php';
+
+// TENTATIVA FINAL: CARREGAMENTO MANUAL DA BIBLIOTECA
+// Vamos incluir o ficheiro principal da Mpdf diretamente.
+$mpdf_path = __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+
+if (!file_exists($mpdf_path)) {
+    die("ERRO CRÍTICO: O ficheiro da biblioteca Mpdf não foi encontrado em '{$mpdf_path}'. Por favor, confirme se a pasta 'vendor/mpdf/mpdf' existe após a instalação do Composer.");
+}
+require_once $mpdf_path;
+
+
+// Inclui a conexão com o banco de dados
 require_once 'includes/database.php';
 
-// --- Lógica para buscar os dados dos pilotos (idêntica à da página de relatórios) ---
+// --- Lógica para buscar os dados dos pilotos (mantida como estava) ---
 $where_clauses = [];
 $params = [];
 $types = '';
@@ -51,11 +61,7 @@ if (!empty($resultados)) {
 }
 
 // --- Geração do PDF a partir do Molde HTML ---
-
 try {
-    // Cria uma nova instância da biblioteca Mpdf
-    $mpdf = new \Mpdf\Mpdf(['tempDir' => __DIR__ . '/tmp']);
-
     // Captura o conteúdo do seu ficheiro de molde HTML
     ob_start();
     include 'template_relatorio_pilotos.php';
@@ -64,15 +70,20 @@ try {
     // Substitui o marcador no tbody pelos dados da tabela
     $final_html = str_replace('', $tableRows, $html_template);
 
+    // Cria uma nova instância da biblioteca Mpdf
+    $mpdf = new \Mpdf\Mpdf(['tempDir' => __DIR__ . '/tmp']);
+
     // Escreve o HTML final no documento PDF
     $mpdf->WriteHTML($final_html);
 
-    // Envia o PDF para o navegador para ser visualizado ou descarregado
-    $mpdf->Output('relatorio_pilotos.pdf', 'I'); // 'I' para inline (visualizar), 'D' para download
+    // Envia o PDF para o navegador
+    $mpdf->Output('relatorio_pilotos.pdf', 'I');
 
-} catch (\Mpdf\MpdfException $e) {
-    // Exibe um erro detalhado se a Mpdf falhar
-    die ('Mpdf Exception: ' . $e->getMessage());
+} catch (Throwable $e) { // Captura qualquer tipo de erro (Error ou Exception)
+    echo "<h1>Erro ao gerar o PDF</h1>";
+    echo "<p><strong>Mensagem:</strong> " . $e->getMessage() . "</p>";
+    echo "<p><strong>Ficheiro:</strong> " . $e->getFile() . " (Linha: " . $e->getLine() . ")</p>";
+    echo "<pre><strong>Stack Trace:</strong><br>" . $e->getTraceAsString() . "</pre>";
 }
 
 exit;
