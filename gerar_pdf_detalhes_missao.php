@@ -320,11 +320,13 @@ if ($missao_details) {
     $pdf->SetFont('Arial','B',12);
     $pdf->Cell(0,10,utf8_decode('4. Logs de Voo Individuais'),0,1,'L'); 
     $pdf->SetFont('Arial','',8);
-    $log_w = [40, 30, 30, 20, 20, 20]; // Larguras ajustadas para a tabela de logs
+    // REMOVIDO: Largura da coluna 'Ficheiro GPX' (40)
+    // Larguras ajustadas para as 5 colunas restantes para somar 180mm (largura da página - margens)
+    $log_w = [45, 45, 30, 30, 30]; 
 
     if (!empty($gpx_files_logs)) {
-        // Cabeçalho da Tabela de Logs
-        $log_header = [utf8_decode('Ficheiro GPX'), utf8_decode('Decolagem'), utf8_decode('Pouso'), utf8_decode('Duração'), utf8_decode('Distância'), utf8_decode('Altura Máx.')]; 
+        // Cabeçalho da Tabela de Logs (Coluna 'Ficheiro GPX' removida)
+        $log_header = [utf8_decode('Decolagem'), utf8_decode('Pouso'), utf8_decode('Duração'), utf8_decode('Distância'), utf8_decode('Altura Máx.')]; 
         foreach($log_header as $i => $col) {
             $pdf->Cell($log_w[$i], 7, $col, 1, 0, 'C'); 
         }
@@ -344,15 +346,17 @@ if ($missao_details) {
                 $pdf->SetFont('Arial','',8);
             }
 
-            $pdf->Cell($log_w[0], $log_row_height, utf8_decode($log['file_name']), 1, 0, 'L');
-            $pdf->Cell($log_w[1], $log_row_height, date("d/m/Y H:i:s", strtotime($log['data_decolagem'])), 1, 0, 'C');
-            $pdf->Cell($log_w[2], $log_row_height, date("d/m/Y H:i:s", strtotime($log['data_pouso'])), 1, 0, 'C');
-            $pdf->Cell($log_w[3], $log_row_height, formatarTempoVooCompleto($log['tempo_voo']), 1, 0, 'C');
-            $pdf->Cell($log_w[4], $log_row_height, formatarDistancia($log['distancia_percorrida']), 1, 0, 'C');
-            $pdf->Cell($log_w[5], $log_row_height, round($log['altura_maxima'], 2) . utf8_decode(' m'), 1, 0, 'C'); 
+            // REMOVIDO: Célula 'Ficheiro GPX' ($log_w[0])
+            // Ajustado para usar os novos índices de $log_w
+            $pdf->Cell($log_w[0], $log_row_height, date("d/m/Y H:i:s", strtotime($log['data_decolagem'])), 1, 0, 'C');
+            $pdf->Cell($log_w[1], $log_row_height, date("d/m/Y H:i:s", strtotime($log['data_pouso'])), 1, 0, 'C');
+            $pdf->Cell($log_w[2], $log_row_height, formatarTempoVooCompleto($log['tempo_voo']), 1, 0, 'C');
+            $pdf->Cell($log_w[3], $log_row_height, formatarDistancia($log['distancia_percorrida']), 1, 0, 'C');
+            $pdf->Cell($log_w[4], $log_row_height, round($log['altura_maxima'], 2) . utf8_decode(' m'), 1, 0, 'C'); 
             $pdf->Ln();
         }
     } else {
+        // Colspan ajustado para o novo número de colunas (5)
         $pdf->Cell(array_sum($log_w), 10, utf8_decode('Nenhum log de voo individual encontrado.'), 1, 1, 'C'); 
     }
     $pdf->Ln(5);
