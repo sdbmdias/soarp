@@ -30,9 +30,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Configurações do banco de dados
         $servername = "localhost";
-        $username = "root";
-        $password = "";
-        $dbname = "drones_db";
+        $username = "flyltm00_soarp";
+        $password = "$1JKLjkl1$123";
+        $dbname = "flyltm00_soarp";
 
         $conn = new mysqli($servername, $username, $password, $dbname);
         if ($conn->connect_error) {

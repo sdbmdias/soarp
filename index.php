@@ -3,9 +3,9 @@ session_start(); // Inicia a sessão para armazenar informações do usuário
 
 // Configurações do banco de dados
 $servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "drones_db";
+$username = "flyltm00_soarp";
+$password = "$1JKLjkl1$123";
+$dbname = "flyltm00_soarp";
 
 $login_error = ""; // Variável para armazenar mensagens de erro de login
 
